@@ -54,37 +54,36 @@ def parse_tif_tags(jpg):
 
 #multiprocessing image processing functions-------------------------------------
 def image_capture(queue):
-   #vidFile = cv2.VideoCapture(0)
-   #while True:
-   #   try:
-   #      flag, frame=vidFile.read()
-   #      if flag==0:
-   #        break
-   #      queue.put(frame)
-   #      cv2.waitKey(20)
-   #   except:
-   #      continue
-   stream = urllib.urlopen('http://10.0.1.15:8080/?action=stream')
-   bytes = ''
-   while True:
-       bytes += stream.read(1024)
-       a = bytes.find('\xff\xd8')
-       b = bytes.find('\xff\xd9')
-       if a != -1 and b != -1:
-           jpg = bytes[a:b + 2]
-           cols, rows, rect_list = parse_tif_tags(jpg)
-           bytes = bytes[b + 2:]
-           i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
-           for rect in rect_list:
-               cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
+    connected = False
+    ip_port = "10.0.1.15:8080"
+    while not connected:
+        try:
+            stream = urllib.urlopen('http://10.0.1.15:8080/?action=stream')
+            connected = True
+        except IOError as e:
+            print("can't urlopen " + ip_port + " " + str(e))
 
-           queue.put(i)
+    bytes = ''
+    while True:
+        bytes += stream.read(1024)
+        a = bytes.find('\xff\xd8')
+        b = bytes.find('\xff\xd9')
+        if a != -1 and b != -1:
+            jpg = bytes[a:b + 2]
+            cols, rows, rect_list = parse_tif_tags(jpg)
+            bytes = bytes[b + 2:]
+            i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
+            for rect in rect_list:
+                cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
+
+            queue.put(i)
 
 
 if __name__ == '__main__':
    queue = multiprocessing.Queue()
    print 'queue initialized...'
    root = tk.Tk()
+   root.wm_title("dash696")
    print 'GUI initialized...'
    image_label = tk.Label(master=root)# label for the video frame
    image_label.pack()
