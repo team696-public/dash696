@@ -8,6 +8,8 @@ import struct
 import PIL.Image
 import PIL.ImageTk
 
+
+
 #tkinter GUI functions----------------------------------------------------------
 def quit_(root, process):
    process.join()
@@ -64,8 +66,12 @@ def image_capture(queue):
             print("can't urlopen " + ip_port + " " + str(e))
 
     bytes = ''
+    byte_count = 0
+    start_secs = time.time()
     while True:
-        bytes += stream.read(1024)
+        buf = stream.read(1024)
+        byte_count += len(buf)
+        bytes += buf
         a = bytes.find('\xff\xd8')
         b = bytes.find('\xff\xd9')
         if a != -1 and b != -1:
@@ -75,8 +81,11 @@ def image_capture(queue):
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
                 cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
-
             queue.put(i)
+            frame_secs = time.time() - start_secs
+            if frame_secs > 0.0: print("Kb/sec = %.1f   frames/sec = %.1f" % (byte_count / frame_secs / 1000.0 * 8, 1.0 / frame_secs))
+            start_secs = time.time()
+            byte_count = 0
 
 
 if __name__ == '__main__':
