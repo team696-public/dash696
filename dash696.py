@@ -40,6 +40,9 @@ def parse_tif_tags(jpg):
     gain_count = 0
     bbox_offset = 0
     bbox_count = 0
+    y = 0
+    u = 0
+    v = 0
     for ii in range(0, ifd_count):
         start_off = TIFOFF + ifd_offset + 2 + ii * 12
         tag, type, count, num = struct.unpack('!HHII', jpg[start_off:start_off + 12])
@@ -48,6 +51,8 @@ def parse_tif_tags(jpg):
         elif tag == 0x9698:
             gain_count = count
             gain_offset = num
+        elif tag == 0x9699:
+            tag, type, count, y, u, v = struct.unpack('!HHIBBB', jpg[start_off:start_off + 11])
         elif tag == 0x9696:
             bbox_count = count
             bbox_offset = num
@@ -62,7 +67,7 @@ def parse_tif_tags(jpg):
             start_off = TIFOFF + bbox_offset + ii * 8
             x0, y0, x1, y1 = struct.unpack('!HHHH', jpg[start_off:start_off + 8])
             rect_list.append(((x0, y0), (x1, y1)))
-    return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, rect_list)
+    return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, rect_list)
 
 
 #multiprocessing image processing functions-------------------------------------
@@ -87,7 +92,7 @@ def image_capture(queue):
         b = bytes.find('\xff\xd9')
         if a != -1 and b != -1:
             jpg = bytes[a:b + 2]
-            exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, rect_list = parse_tif_tags(jpg)
+            exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, rect_list = parse_tif_tags(jpg)
             bytes = bytes[b + 2:]
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
@@ -96,6 +101,7 @@ def image_capture(queue):
             frame_secs = time.time() - start_secs
             if frame_secs > 0.0: print("Kb/sec = %.1f   frames/sec = %.1f" % (byte_count / frame_secs / 1000.0 * 8, 1.0 / frame_secs))
             print("exp= %u  gains: alog %.3f dig %.3f red %.3f blue %.3f" % (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain))
+            print("yuv= %u %u %u" % (y, u, v))
             start_secs = time.time()
             byte_count = 0
 
