@@ -1,32 +1,42 @@
-import time
-import multiprocessing
+import ttk
 import Tkinter as tk
-import cv2
-import urllib
-import numpy as np
+import multiprocessing
 import struct
+import time
+import urllib
+
 import PIL.Image
 import PIL.ImageTk
-
+import cv2
+import numpy as np
 
 
 #tkinter GUI functions----------------------------------------------------------
 def quit_(root, process):
    process.join()
    root.destroy()
+   
+class Dash_696_Gui:
+    def __init__(self, master, queue):
+        self.master = master
+        self.queue = queue
+        self.image_label = tk.Label(master)# label for the video frame
+        self.image_label.pack()
+        self.master.after(0, func=lambda: self.update_all())
 
-def update_image(image_label, queue):
-   frame = queue.get()
-   im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-   a = PIL.Image.fromarray(im)
-   b = PIL.ImageTk.PhotoImage(image=a)
-   image_label.configure(image=b)
-   image_label._image_cache = b  # avoid garbage collection
-   root.update()
+    def update_image(self):
+       frame = self.queue.get()
+       im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+       a = PIL.Image.fromarray(im)
+       b = PIL.ImageTk.PhotoImage(image=a)
+       self.image_label.configure(image=b)
+       self.image_label._image_cache = b  # avoid garbage collection
+       self.master.update()
 
-def update_all(root, image_label, queue):
-   update_image(image_label, queue)
-   root.after(0, func=lambda: update_all(root, image_label, queue))
+    def update_all(self):
+       # type: () -> object
+       self.update_image()
+       self.master.after(0, func=lambda: self.update_all())
 
 def parse_tif_tags(jpg):
     TIFOFF = 12
@@ -69,21 +79,27 @@ def parse_tif_tags(jpg):
             rect_list.append(((x0, y0), (x1, y1)))
     return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, rect_list)
 
-
-#multiprocessing image processing functions-------------------------------------
-def image_capture(queue):
+def connect_to_server(ip_port):
     connected = False
-    ip_port = "10.0.1.15:8080"
     while not connected:
         try:
             stream = urllib.urlopen('http://10.0.1.15:8080/?action=stream')
             connected = True
         except IOError as e:
             print("can't urlopen " + ip_port + " " + str(e))
+    return stream
+
+
+
+#multiprocessing image processing functions-------------------------------------
+def image_capture(queue):
+
 
     bytes = ''
     byte_count = 0
     start_secs = time.time()
+    default_ip_port = "10.0.1.15:8080"
+    stream = connect_to_server(default_ip_port)
     while True:
         buf = stream.read(1024)
         byte_count += len(buf)
@@ -111,19 +127,16 @@ if __name__ == '__main__':
    print 'queue initialized...'
    root = tk.Tk()
    root.wm_title("dash696")
-   print 'GUI initialized...'
-   image_label = tk.Label(master=root)# label for the video frame
-   image_label.pack()
-   print 'GUI image label initialized...'
+   dash_696_gui = Dash_696_Gui(root, queue)
    p = multiprocessing.Process(target=image_capture, args=(queue,))
    p.start()
    print 'image capture process has started...'
    # quit button
-   quit_button = tk.Button(master=root, text='Quit',command=lambda: quit_(root,p))
-   quit_button.pack()
-   print 'quit button initialized...'
+   #quit_button = tk.Button(master=root, text='Quit',command=lambda: quit_(root,p))
+   #quit_button.pack()
+
    # setup the update callback
-   root.after(0, func=lambda: update_all(root, image_label, queue))
+
    #print 'root.after was called...'
    root.mainloop()
    print 'mainloop exit'
