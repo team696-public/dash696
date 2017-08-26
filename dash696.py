@@ -15,28 +15,127 @@ import numpy as np
 def quit_(root, process):
    process.join()
    root.destroy()
-   
-class Dash_696_Gui:
-    def __init__(self, master, queue):
-        self.master = master
+
+class Gain_Frame(ttk.Frame, object):
+    def __init__(self, parent):
+        super(Gain_Frame, self).__init__()
+
+        self.exposure_text = tk.StringVar()
+        self.analog_text = tk.StringVar()
+        self.digital_text = tk.StringVar()
+        self.awb_red_text = tk.StringVar()
+        self.awb_blue_text = tk.StringVar()
+        self.y_text = tk.StringVar()
+        self.u_text = tk.StringVar()
+        self.v_text = tk.StringVar()
+        self.bits_per_second_text = tk.StringVar()
+        self.frames_per_second_text = tk.StringVar()
+
+        self.exposure_text.set("1.0")
+        self.analog_text.set("1.0")
+        self.digital_text.set("1.0")
+        self.awb_red_text.set("1.0")
+        self.awb_blue_text.set("1.0")
+        self.y_text.set("128")
+        self.u_text.set("128")
+        self.v_text.set("128")
+        self.bits_per_second_text.set("0.0")
+        self.frames_per_second_text.set("0.0")
+
+        self.exposure_label_1 = ttk.Label(self, text="exposure")
+        self.exposure_label_2 = ttk.Label(self, textvariable = self.exposure_text)
+        self.exposure_label_1.grid(row = 0, column = 0)
+        self.exposure_label_2.grid(row = 0, column = 1)
+
+        self.analog_label_1 = ttk.Label(self, text="analog")
+        self.analog_label_2 = ttk.Label(self, textvariable = self.analog_text)
+        self.analog_label_1.grid(row=1, column=0)
+        self.analog_label_2.grid(row=1, column=1)
+
+        self.digital_label_1 = ttk.Label(self, text="digital")
+        self.digital_label_2 = ttk.Label(self, textvariable = self.digital_text)
+        self.digital_label_1.grid(row=2, column=0)
+        self.digital_label_2.grid(row=2, column=1)
+
+        self.awb_red_label_1 = ttk.Label(self, text="AWB red")
+        self.awb_red_label_2 = ttk.Label(self, textvariable = self.awb_red_text)
+        self.awb_red_label_1.grid(row=3, column=0)
+        self.awb_red_label_2.grid(row=3, column=1)
+
+        self.awb_blue_label_1 = ttk.Label(self, text="AWB blue")
+        self.awb_blue_label_2 = ttk.Label(self, textvariable = self.awb_blue_text)
+        self.awb_blue_label_1.grid(row=4, column=0)
+        self.awb_blue_label_2.grid(row=4, column=1)
+
+        self.y_label_1 = ttk.Label(self, text="center Y")
+        self.y_label_2 = ttk.Label(self, textvariable=self.y_text)
+        self.y_label_1.grid(row=5, column=0)
+        self.y_label_2.grid(row=5, column=1)
+
+        self.u_label_1 = ttk.Label(self, text="center U")
+        self.u_label_2 = ttk.Label(self, textvariable=self.u_text)
+        self.u_label_1.grid(row=6, column=0)
+        self.u_label_2.grid(row=6, column=1)
+
+        self.v_label_1 = ttk.Label(self, text="center V")
+        self.v_label_2 = ttk.Label(self, textvariable=self.v_text)
+        self.v_label_1.grid(row=7, column=0)
+        self.v_label_2.grid(row=7, column=1)
+
+        self.bits_per_second_label_1 = ttk.Label(self, text="bits per second")
+        self.bits_per_second_label_2 = ttk.Label(self, textvariable = self.bits_per_second_text)
+        self.bits_per_second_label_1.grid(row=8, column=0)
+        self.bits_per_second_label_2.grid(row=8, column=1)
+
+        self.frames_per_second_label_1 = ttk.Label(self, text="frames per second")
+        self.frames_per_second_label_2 = ttk.Label(self, textvariable=self.frames_per_second_text)
+        self.frames_per_second_label_1.grid(row=9, column=0)
+        self.frames_per_second_label_2.grid(row=9, column=1)
+
+    def update(self, gain_tuple):
+        exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, connections,\
+                                                                        bits_per_second, frames_per_second = gain_tuple
+        self.exposure_text.set("%10.3f" % (exposure))
+        self.analog_text.set("%10.3f" %(analog_gain))
+        self.digital_text.set("%10.3f" % (digital_gain))
+        self.awb_red_text.set("%10.3f" % (awb_red_gain))
+        self.awb_blue_text.set("%10.3f" % (awb_blue_gain))
+        self.y_text.set("%3d" % (y))
+        self.u_text.set("%3d" % (u))
+        self.v_text.set("%3d" % (v))
+        if bits_per_second > 0.0:
+            self.bits_per_second_text.set("%12.3f K" % (bits_per_second))
+        if frames_per_second > 0.0:
+            self.frames_per_second_text.set("%10.3f" % (frames_per_second))
+
+
+class Dash_696(ttk.Frame, object):
+    def __init__(self, queue):
+        super(Dash_696, self).__init__()
+        self.style = ttk.Style()
+        self.style.theme_use("default")
         self.queue = queue
-        self.image_label = tk.Label(master)# label for the video frame
-        self.image_label.pack()
+        self.gain_frame = Gain_Frame(self.master)
+        self.gain_frame.pack(side=tk.LEFT)
+        self.image_label = ttk.Label(self.master)# label for the video frame
+        self.image_label.pack(side=tk.RIGHT)
         self.master.after(0, func=lambda: self.update_all())
 
-    def update_image(self):
-       frame = self.queue.get()
-       im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-       a = PIL.Image.fromarray(im)
-       b = PIL.ImageTk.PhotoImage(image=a)
-       self.image_label.configure(image=b)
-       self.image_label._image_cache = b  # avoid garbage collection
-       self.master.update()
+    def update_image(self, cv_img):
+        im = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        a = PIL.Image.fromarray(im)
+        b = PIL.ImageTk.PhotoImage(image=a)
+        self.image_label.configure(image=b)
+        self.image_label._image_cache = b  # avoid garbage collection
+        self.master.update()
 
     def update_all(self):
-       # type: () -> object
-       self.update_image()
-       self.master.after(0, func=lambda: self.update_all())
+        cv_img = self.queue.get()
+        cv_img, gain_tuple = self.queue.get()
+
+        self.update_image(cv_img)
+        self.gain_frame.update(gain_tuple)
+        self.master.after(0, func=lambda: self.update_all())
 
 def parse_tif_tags(jpg):
     TIFOFF = 12
@@ -113,13 +212,20 @@ def image_capture(queue):
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
                 cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
-            queue.put(i)
             frame_secs = time.time() - start_secs
             if frame_secs > 0.0: print("Kb/sec = %.1f   frames/sec = %.1f" % (byte_count / frame_secs / 1000.0 * 8, 1.0 / frame_secs))
             print("exp= %u  gains: alog %.3f dig %.3f red %.3f blue %.3f" % (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain))
             print("yuv= %u %u %u" % (y, u, v))
+            frames_per_second = 0.0
+            bits_per_second = 0.0
+            if frame_secs > 0:
+                bits_per_second = byte_count / frame_secs / 1000.0 * 8
+                frames_per_second = 1.0 / frame_secs
             start_secs = time.time()
             byte_count = 0
+            connections = 1
+            queue.put((i, (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, connections,
+                           bits_per_second, frames_per_second)))
 
 
 if __name__ == '__main__':
@@ -127,7 +233,7 @@ if __name__ == '__main__':
    print 'queue initialized...'
    root = tk.Tk()
    root.wm_title("dash696")
-   dash_696_gui = Dash_696_Gui(root, queue)
+   dash_696 = Dash_696(queue)
    p = multiprocessing.Process(target=image_capture, args=(queue,))
    p.start()
    print 'image capture process has started...'
