@@ -12,13 +12,26 @@ import numpy as np
 
 
 #tkinter GUI functions----------------------------------------------------------
-def quit_(root, process):
-   process.join()
-   root.destroy()
+
+class Cam_Param_Frame(ttk.Frame, object):
+    def __init__(self, parent):
+        super(Cam_Param_Frame, self).__init__(parent)
+        self.awb_label = ttk.Label(self, text="AWB")
+        self.label2 = ttk.Label(self, text="label2")
+        #self.awb_param = ttk.Spinbox(self, values=("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
+                                                   #"incandescent", "flash", "horizon"))
+        self.awb_label.grid(row = 0, column = 0)
+        self.label2.grid(row=0, column=1)
+        #self.awb_param.grid(row = 0, column = 1)
+
+    def update(self):
+        pass
+
+
 
 class Gain_Frame(ttk.Frame, object):
     def __init__(self, parent):
-        super(Gain_Frame, self).__init__()
+        super(Gain_Frame, self).__init__(parent)
 
         self.exposure_text = tk.StringVar()
         self.analog_text = tk.StringVar()
@@ -92,21 +105,19 @@ class Gain_Frame(ttk.Frame, object):
         self.frames_per_second_label_1.grid(row=9, column=0)
         self.frames_per_second_label_2.grid(row=9, column=1)
 
-    def update(self, gain_tuple):
-        exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, connections,\
-                                                                        bits_per_second, frames_per_second = gain_tuple
-        self.exposure_text.set("%10.3f" % (exposure))
-        self.analog_text.set("%10.3f" %(analog_gain))
-        self.digital_text.set("%10.3f" % (digital_gain))
-        self.awb_red_text.set("%10.3f" % (awb_red_gain))
-        self.awb_blue_text.set("%10.3f" % (awb_blue_gain))
-        self.y_text.set("%3d" % (y))
-        self.u_text.set("%3d" % (u))
-        self.v_text.set("%3d" % (v))
-        if bits_per_second > 0.0:
-            self.bits_per_second_text.set("%12.3f K" % (bits_per_second))
-        if frames_per_second > 0.0:
-            self.frames_per_second_text.set("%10.3f" % (frames_per_second))
+    def update(self, queue_entry):
+        self.exposure_text.set("%10.3f" % (queue_entry.exposure_secs))
+        self.analog_text.set("%10.3f" %(queue_entry.analog_gain))
+        self.digital_text.set("%10.3f" % (queue_entry.digital_gain))
+        self.awb_red_text.set("%10.3f" % (queue_entry.awb_red_gain))
+        self.awb_blue_text.set("%10.3f" % (queue_entry.awb_blue_gain))
+        self.y_text.set("%3d" % (queue_entry.y))
+        self.u_text.set("%3d" % (queue_entry.u))
+        self.v_text.set("%3d" % (queue_entry.v))
+        if queue_entry.bits_per_second > 0.0:
+            self.bits_per_second_text.set("%12.3f K" % (queue_entry.bits_per_second))
+        if queue_entry.frames_per_second > 0.0:
+            self.frames_per_second_text.set("%10.3f" % (queue_entry.frames_per_second))
 
 
 class Dash_696(ttk.Frame, object):
@@ -115,10 +126,15 @@ class Dash_696(ttk.Frame, object):
         self.style = ttk.Style()
         self.style.theme_use("default")
         self.queue = queue
-        self.gain_frame = Gain_Frame(self.master)
-        self.gain_frame.pack(side=tk.LEFT)
+        self.notebook = ttk.Notebook(self.master)
+        self.tab0 = Gain_Frame(self.notebook)
+        self.notebook.add(self.tab0, text="Gains")
+        self.tab1 = Cam_Param_Frame(self.notebook)
+        self.notebook.add(self.tab1, text="Camera Params")
+        self.notebook.pack(side=tk.LEFT)
         self.image_label = ttk.Label(self.master)# label for the video frame
         self.image_label.pack(side=tk.RIGHT)
+        self.do_quit = False
         self.master.after(0, func=lambda: self.update_all())
 
     def update_image(self, cv_img):
@@ -130,12 +146,48 @@ class Dash_696(ttk.Frame, object):
         self.master.update()
 
     def update_all(self):
-        cv_img = self.queue.get()
-        cv_img, gain_tuple = self.queue.get()
+        queue_entry = self.queue.get()
+        if queue_entry.do_quit:
+            self.quit()
+        else:
+            self.update_image(queue_entry.cv_img)
+            self.tab0.update(queue_entry)
+            self.tab1.update()
+            self.master.after(0, func=lambda: self.update_all())
 
-        self.update_image(cv_img)
-        self.gain_frame.update(gain_tuple)
-        self.master.after(0, func=lambda: self.update_all())
+    def quit(self):
+        self.master.quit() # quit mainloop()
+
+class Image_Capture_Queue_Entry():
+    def __init__(self,
+                 cv_img,
+                 exposure_secs = 0.0,
+                 analog_gain = 0.0,
+                 digital_gain = 0.0,
+                 awb_red_gain = 0.0,
+                 awb_blue_gain = 0.0,
+                 y = 0,
+                 u = 0,
+                 v = 0,
+                 udp_connection_status = 0,
+                 bits_per_second = 0.0,
+                 frames_per_second = 0.0):
+        self.do_quit = False
+        rows, cols, channels = cv_img.shape
+        if rows == 0 and cols == 0:
+            self.do_quit = True
+        self.cv_img = cv_img
+        self.exposure_secs = exposure_secs
+        self.analog_gain = analog_gain
+        self.digital_gain = digital_gain
+        self.awb_red_gain = awb_red_gain
+        self.awb_blue_gain = awb_blue_gain
+        self.y = y
+        self.u = u
+        self.v = v
+        self.udp_connection_status = udp_connection_status
+        self.bits_per_second = bits_per_second
+        self.frames_per_second = frames_per_second
 
 def parse_tif_tags(jpg):
     TIFOFF = 12
@@ -182,24 +234,33 @@ def connect_to_server(ip_port):
     connected = False
     while not connected:
         try:
-            stream = urllib.urlopen('http://10.0.1.15:8080/?action=stream')
+            stream = urllib.urlopen('http://' + ip_port + '/?action=stream')
             connected = True
         except IOError as e:
             print("can't urlopen " + ip_port + " " + str(e))
     return stream
 
+def draw_crosshairs(img):
+    LEN = 3
+    COLOR = (0, 255, 255)
+    rows, cols, channels = img.shape
+    center_x = cols / 2
+    center_y = rows / 2
+    cv2.line(img, (center_x, center_y - 2 * LEN), (center_x, center_y - LEN), COLOR)
+    cv2.line(img, (center_x, center_y + 2 * LEN), (center_x, center_y + LEN), COLOR)
+    cv2.line(img, (center_x - 2 * LEN, center_y), (center_x - LEN, center_y), COLOR)
+    cv2.line(img, (center_x + 2 * LEN, center_y), (center_x + LEN, center_y), COLOR)
 
 
 #multiprocessing image processing functions-------------------------------------
-def image_capture(queue):
-
-
+def image_capture(queue, do_quit):
     bytes = ''
     byte_count = 0
     start_secs = time.time()
-    default_ip_port = "10.0.1.15:8080"
+    #default_ip_port = "10.0.1.15:8080"
+    default_ip_port = "10.6.96.96:8080"
     stream = connect_to_server(default_ip_port)
-    while True:
+    while not do_quit.value:
         buf = stream.read(1024)
         byte_count += len(buf)
         bytes += buf
@@ -212,10 +273,11 @@ def image_capture(queue):
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
                 cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
+            draw_crosshairs(i)
             frame_secs = time.time() - start_secs
-            if frame_secs > 0.0: print("Kb/sec = %.1f   frames/sec = %.1f" % (byte_count / frame_secs / 1000.0 * 8, 1.0 / frame_secs))
-            print("exp= %u  gains: alog %.3f dig %.3f red %.3f blue %.3f" % (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain))
-            print("yuv= %u %u %u" % (y, u, v))
+            #if frame_secs > 0.0: print("Kb/sec = %.1f   frames/sec = %.1f" % (byte_count / frame_secs / 1000.0 * 8, 1.0 / frame_secs))
+            #print("exp= %u  gains: alog %.3f dig %.3f red %.3f blue %.3f" % (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain))
+            #print("yuv= %u %u %u" % (y, u, v))
             frames_per_second = 0.0
             bits_per_second = 0.0
             if frame_secs > 0:
@@ -223,29 +285,38 @@ def image_capture(queue):
                 frames_per_second = 1.0 / frame_secs
             start_secs = time.time()
             byte_count = 0
-            connections = 1
-            queue.put((i, (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, connections,
-                           bits_per_second, frames_per_second)))
+            udp_connection_status = 0
+            queue.put(Image_Capture_Queue_Entry(i, exposure/1000.0, analog_gain, digital_gain, awb_red_gain,
+                                                awb_blue_gain, y, u, v, udp_connection_status, bits_per_second,
+                                                frames_per_second))
+    null_image = np.zeros((0, 0, 3), np.uint8)
+    queue.put(Image_Capture_Queue_Entry(null_image))
 
+class Quitter():
+    def __init__(self):
+        self.do_quit = multiprocessing.Value('d',0)
+
+    def quit(self):
+        self.do_quit.value = 1
 
 if __name__ == '__main__':
    queue = multiprocessing.Queue()
    print 'queue initialized...'
    root = tk.Tk()
    root.wm_title("dash696")
+   quitter = Quitter()
+   root.protocol("WM_DELETE_WINDOW", quitter.quit) # quit if window is deleted
    dash_696 = Dash_696(queue)
-   p = multiprocessing.Process(target=image_capture, args=(queue,))
+   p = multiprocessing.Process(target=image_capture, args=(queue, quitter.do_quit))
    p.start()
    print 'image capture process has started...'
-   # quit button
-   #quit_button = tk.Button(master=root, text='Quit',command=lambda: quit_(root,p))
-   #quit_button.pack()
 
    # setup the update callback
 
-   #print 'root.after was called...'
    root.mainloop()
    print 'mainloop exit'
+   #p.terminate()
    p.join()
+   root.destroy()
    print 'image capture process exit'
 
