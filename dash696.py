@@ -4,25 +4,192 @@ import multiprocessing
 import struct
 import time
 import urllib
+import socket
 
 import PIL.Image
 import PIL.ImageTk
 import cv2
 import numpy as np
 
+class Tcp_Tag:
+    # These constants must match those with the same names in tcp_comms.h
+    RASPICAM_QUIT =                   0
+    RASPICAM_SATURATION =             1
+    RASPICAM_SHARPNESS =              2
+    RASPICAM_CONTRAST =               3
+    RASPICAM_BRIGHTNESS =             4
+    RASPICAM_ISO =                    5
+    RASPICAM_METERING_MODE =          6
+    RASPICAM_VIDEO_STABILISATION =    7
+    RASPICAM_EXPOSURE_COMPENSATION =  8
+    RASPICAM_EXPOSURE_MODE =          9
+    RASPICAM_AWB_MODE =              10
+    RASPICAM_AWB_GAINS =             11
+    RASPICAM_IMAGE_FX =              12
+    RASPICAM_COLOUR_FX =             13
+    RASPICAM_ROTATION =              14
+    RASPICAM_FLIPS =                 15
+    RASPICAM_ROI =                   16
+    RASPICAM_SHUTTER_SPEED =         17
+    RASPICAM_DRC =                   18
+    RASPICAM_STATS_PASS =            19
+    RASPICAM_TEST_IMAGE_ENABLE =     20
+    RASPICAM_YUV_WRITE_ENABLE =      21
+    RASPICAM_JPG_WRITE_ENABLE =      22
+    RASPICAM_DETECT_YUV_ENABLE =     23
+    RASPICAM_BLOB_YUV =              24
+
+
+class Tcp_Comms():
+    def __init__(self, ip_addr, port):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((ip_addr, port))
+
+    def _send_int_msg(self, tag, count, int0=0, int1=0, int2=0):
+        if count == 0:
+            data = struct.pack('!BBBB', tag, 0, 0, 0)
+        elif count == 1:
+            data = struct.pack('!BBBBI', tag, 0, 0, 0, int0)
+        elif count == 2:
+            data = struct.pack('!BBBBII', tag, 0, 0, 0, int0, int1)
+        elif count == 3:
+            data = struct.pack('!BBBBIII', tag, 0, 0, 0, int0, int1, int2)
+        else:
+            print("_send_int_msg saw bad count " + str(count))
+            return
+        bytes = self.sock.send(data)
+        if bytes != len(data):
+            print("_send_int_msg: short sock.send byte count (" + str(bytes) + "); expected " + str(len(data)) + "; ignoring")
+
+    def _send_float_msg(self, tag, count, float0 = 0, float1 = 0, float2 = 0, float3 = 0):
+        if count == 0:
+            data = struct.pack('!BBBB', tag, 0, 0, 0)
+        elif count == 1:
+            data = struct.pack('!BBBBf', tag, 0, 0, 0, float0)
+        elif count == 2:
+            data = struct.pack('!BBBBff', tag, 0, 0, 0, float0, float1)
+        elif count == 3:
+            data = struct.pack('!BBBBfff', tag, 0, 0, 0, float0, float1, float2)
+        elif count == 4:
+            data = struct.pack('!BBBBffff', tag, 0, 0, 0, float0, float1, float2, float3)
+        else:
+            print("_send_int_msg saw bad count " + str(count))
+            return
+        bytes = self.sock.send(data)
+        if bytes != len(data):
+            print("_send_float_msg: short sock.send byte count (" + str(bytes) + "); expected " + str(len(data)) + "; ignoring")
+
+
+    def send_saturation(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_SATURATION, 1, value)
+
+    def send_sharpness(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_SHARPNESS, 1, value)
+
+    def send_saturation(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_SATURATION, 1, value)
+
+    def send_contrast(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_CONTRAST, 1, value)
+
+    def send_brightness(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_BRIGHTNESS, 1, value)
+
+    def send_iso(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_ISO, 1, value)
+
+    def send_metering_mode(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_METERING_MODE, 1, value)
+
+    def send_video_stabilisation(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_VIDEO_STABILISATION, 1, value)
+
+    def send_exposure_compensation(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_EXPOSURE_COMPENSATION, 1, value)
+
+    def send_expsoure_mode(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_EXPOSURE_MODE, 1, value)
+
+    def send_awb_mode(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_AWB_MODE, 1, value)
+
+    def send_awb_gains(self, red_gain, blue_gain):
+        self._send_float_msg(Tcp_Tag.RASPICAM_AWB_GAINS, 2, red_gain, blue_gain)
+
+    def send_image_fx(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_IMAGE_FX, 1, value)
+
+    def send_colour_fx(self, red, green, blue):
+        self._send_int_msg(Tcp_Tag.RASPICAM_COLOUR_FX, 3, red, green, blue)
+
+    def send_rotation(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_ROTATION, 1, value)
+
+    def send_flips(self, hflip, vflip):
+        self._send_int_msg(Tcp_Tag.RASPICAM_FLIPS, 2, hflip, vflip)
+
+    def send_roi(self, x, y, w, h):
+        self._send_float_msg(Tcp_Tag.RASPICAM_ROI, 4, x, y, w, h)
+
+    def send_shutter_speed(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_SHUTTER_SPEED, 1, value)
+
+    def send_drc(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_DRC, 1, value)
+
+    def send_stats_pass(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_STATS_PASS, 1, value)
+
+    def send_test_image_enable(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_TEST_IMAGE_ENABLE, 1, value)
+
+    def send_yuv_write_enable(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_YUV_WRITE_ENABLE, 1, value)
+
+    def send_jpg_write_enable(self, value):
+        self._send_int_msg(Tcp_Tag.RASPICAM_JPG_WRITE_ENABLE, 1, value)
+
+    def send_blob_yuv(self, y_min, y_max, u_min, u_max, v_min, v_max):
+        struct.pack('!BBBBBBB', Tcp_Tag.RASPICAM_BLOB_YUV, y_min, y_max, u_min, u_max, v_min, v_max)
+        self.sock.send(str)
+
+
+
+
+
+
+
+
+
 
 #tkinter GUI functions----------------------------------------------------------
+class Awb_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.value_list = ("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
+                      "incandescent", "flash", "horizon")
+        self.value = tk.StringVar()
+        self.value.set(self.value_list[0])
+        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.tcp_comms = tcp_comms
+
+    def command(self, value):
+        for ii in range(0, len(self.value_list)):
+            if value == self.value_list[ii]: break
+        print(value + " " + str(ii))
+        self.tcp_comms.send_awb_mode(ii)
+
+    def grid(self, row, column):
+        self.widget.grid(row = row, column = column)
 
 class Cam_Param_Frame(ttk.Frame, object):
-    def __init__(self, parent):
+    def __init__(self, parent, ip_addr):
         super(Cam_Param_Frame, self).__init__(parent)
+        TCP_PORT = 10696
+        tcp_comms = Tcp_Comms(ip_addr, TCP_PORT)
         self.awb_label = ttk.Label(self, text="AWB")
-        self.label2 = ttk.Label(self, text="label2")
-        #self.awb_param = ttk.Spinbox(self, values=("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
-                                                   #"incandescent", "flash", "horizon"))
+        self.awb_param = Awb_Widget(self, tcp_comms)
         self.awb_label.grid(row = 0, column = 0)
-        self.label2.grid(row=0, column=1)
-        #self.awb_param.grid(row = 0, column = 1)
+        self.awb_param.grid(row = 0, column = 1)
 
     def update(self):
         pass
@@ -121,7 +288,7 @@ class Gain_Frame(ttk.Frame, object):
 
 
 class Dash_696(ttk.Frame, object):
-    def __init__(self, queue):
+    def __init__(self, ip_addr, queue):
         super(Dash_696, self).__init__()
         self.style = ttk.Style()
         self.style.theme_use("default")
@@ -129,7 +296,7 @@ class Dash_696(ttk.Frame, object):
         self.notebook = ttk.Notebook(self.master)
         self.tab0 = Gain_Frame(self.notebook)
         self.notebook.add(self.tab0, text="Gains")
-        self.tab1 = Cam_Param_Frame(self.notebook)
+        self.tab1 = Cam_Param_Frame(self.notebook, ip_addr)
         self.notebook.add(self.tab1, text="Camera Params")
         self.notebook.pack(side=tk.LEFT)
         self.image_label = ttk.Label(self.master)# label for the video frame
@@ -230,8 +397,9 @@ def parse_tif_tags(jpg):
             rect_list.append(((x0, y0), (x1, y1)))
     return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, rect_list)
 
-def connect_to_server(ip_port):
+def connect_to_server(ip_addr, port):
     connected = False
+    ip_port = ip_addr + ":" + port
     while not connected:
         try:
             stream = urllib.urlopen('http://' + ip_port + '/?action=stream')
@@ -241,7 +409,7 @@ def connect_to_server(ip_port):
     return stream
 
 def draw_crosshairs(img):
-    LEN = 3
+    LEN = 3  # length in pixels of each component of crosshairs mark
     COLOR = (0, 255, 255)
     rows, cols, channels = img.shape
     center_x = cols / 2
@@ -253,13 +421,14 @@ def draw_crosshairs(img):
 
 
 #multiprocessing image processing functions-------------------------------------
-def image_capture(queue, do_quit):
+def image_capture(ip_addr, queue, do_quit):
     bytes = ''
     byte_count = 0
     start_secs = time.time()
-    #default_ip_port = "10.0.1.15:8080"
-    default_ip_port = "10.6.96.96:8080"
-    stream = connect_to_server(default_ip_port)
+    #ip_addr = "10.6.96.96"
+    port = "8080"
+    #default_ip_port = "10.6.96.96:8080"
+    stream = connect_to_server(ip_addr, port)
     while not do_quit.value:
         buf = stream.read(1024)
         byte_count += len(buf)
@@ -306,8 +475,9 @@ if __name__ == '__main__':
    root.wm_title("dash696")
    quitter = Quitter()
    root.protocol("WM_DELETE_WINDOW", quitter.quit) # quit if window is deleted
-   dash_696 = Dash_696(queue)
-   p = multiprocessing.Process(target=image_capture, args=(queue, quitter.do_quit))
+   SERVER_IP_ADDR = "10.6.96.96"
+   dash_696 = Dash_696(SERVER_IP_ADDR, queue)
+   p = multiprocessing.Process(target=image_capture, args=(SERVER_IP_ADDR, queue, quitter.do_quit))
    p.start()
    print 'image capture process has started...'
 
