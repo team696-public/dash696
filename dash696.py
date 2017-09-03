@@ -68,6 +68,7 @@ class Tcp_Comms():
             data = struct.pack('!BBBBf', tag, 0, 0, 0, float0)
         elif count == 2:
             data = struct.pack('!BBBBff', tag, 0, 0, 0, float0, float1)
+            #print(':'.join(x.encode('hex') for x in data))
         elif count == 3:
             data = struct.pack('!BBBBfff', tag, 0, 0, 0, float0, float1, float2)
         elif count == 4:
@@ -107,7 +108,7 @@ class Tcp_Comms():
     def send_exposure_compensation(self, value):
         self._send_int_msg(Tcp_Tag.RASPICAM_EXPOSURE_COMPENSATION, 1, value)
 
-    def send_expsoure_mode(self, value):
+    def send_exposure_mode(self, value):
         self._send_int_msg(Tcp_Tag.RASPICAM_EXPOSURE_MODE, 1, value)
 
     def send_awb_mode(self, value):
@@ -166,7 +167,41 @@ class Tcp_Comms():
 class Awb_Widget():
     def __init__(self, parent, tcp_comms):
         self.value_list = ("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
-                      "incandescent", "flash", "horizon")
+                           "incandescent", "flash", "horizon")
+        self.value = tk.StringVar()
+        self.value.set(self.value_list[1])
+        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.tcp_comms = tcp_comms
+
+    def command(self, value):
+        for ii in range(0, len(self.value_list)):
+            if value == self.value_list[ii]: break
+        self.tcp_comms.send_awb_mode(ii)
+
+    def grid(self, row, column):
+        self.widget.grid(row = row, column = column)
+
+class Exposure_Mode_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.value_list = ("off", "auto", "night", "nightpreview", "backlight", "spotlight", "sports",
+                           "snow", "beach", "verylong", "fixedfps", "antishake", "fireworks")
+        self.value = tk.StringVar()
+        self.value.set(self.value_list[1])
+        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.tcp_comms = tcp_comms
+
+    def command(self, value):
+        for ii in range(0, len(self.value_list)):
+            if value == self.value_list[ii]: break
+        self.tcp_comms.send_exposure_mode(ii)
+
+    def grid(self, row, column):
+        self.widget.grid(row = row, column = column)
+
+
+class Metering_Mode_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.value_list = ("average", "spot", "backlit", "matrix")
         self.value = tk.StringVar()
         self.value.set(self.value_list[0])
         self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
@@ -176,10 +211,48 @@ class Awb_Widget():
         for ii in range(0, len(self.value_list)):
             if value == self.value_list[ii]: break
         print(value + " " + str(ii))
-        self.tcp_comms.send_awb_mode(ii)
+        self.tcp_comms.send_metering_mode(ii)
 
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
+
+class Awb_Gains_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.red_gain = 0.0
+        self.value_red = tk.StringVar()
+        self.value_red.set(str(self.red_gain))
+        self.widget_red = tk.Entry(parent, textvariable=self.value_red)
+        self.blue_gain = 0.0
+        self.value_blue = tk.StringVar()
+        self.value_blue.set(str(self.blue_gain))
+        self.widget_blue = tk.Entry(parent, textvariable=self.value_blue)
+        self.ok_button = tk.Button(parent, text="OK", command=self.command)
+        self.tcp_comms = tcp_comms
+
+    def command(self):
+        saw_error = False
+        try:
+            self.red_gain = float(self.value_red.get())
+        except:
+            print("red must be floating point value")
+            self.value_red.set(str(self.red_gain))
+            saw_error = True
+        try:
+            self.blue_gain = float(self.value_blue.get())
+        except:
+            print("blue must be floating point value")
+            self.value_blue.set(str(self.blue_gain))
+            saw_error = True
+        if not saw_error:
+            self.tcp_comms.send_awb_gains(self.red_gain, self.blue_gain)
+
+    def grid(self, row, column):
+        self.widget_red.grid(row = row, column = column)
+        self.widget_blue.grid(row = row + 1, column = column)
+        self.ok_button.grid(row = row + 2, column = column)
+
+
+
 
 class Cam_Param_Frame(ttk.Frame, object):
     def __init__(self, parent, ip_addr):
@@ -190,6 +263,22 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.awb_param = Awb_Widget(self, tcp_comms)
         self.awb_label.grid(row = 0, column = 0)
         self.awb_param.grid(row = 0, column = 1)
+        self.exposure_mode_label = ttk.Label(self, text="Exposure Mode")
+        self.exposure_mode_param = Exposure_Mode_Widget(self, tcp_comms)
+        self.exposure_mode_label.grid(row=1, column=0)
+        self.exposure_mode_param.grid(row=1, column=1)
+        self.metering_mode_label = ttk.Label(self, text="Metering Mode")
+        self.metering_mode_param = Metering_Mode_Widget(self, tcp_comms)
+        self.metering_mode_label.grid(row=2, column=0)
+        self.metering_mode_param.grid(row=2, column=1)
+
+        self.awb_gain_red_label = ttk.Label(self, text="AWB Gain Red")
+        self.awb_gain_blue_label = ttk.Label(self, text="AWB Gain Blue")
+        self.awb_gains_param = Awb_Gains_Widget(self, tcp_comms)
+        self.awb_gain_red_label.grid(row=3, column=0)
+        self.awb_gain_blue_label.grid(row=4, column=0)
+        self.awb_gains_param.grid(row=3, column=1)
+
 
     def update(self):
         pass
