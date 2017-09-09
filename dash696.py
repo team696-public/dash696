@@ -198,6 +198,19 @@ class Exposure_Mode_Widget():
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
 
+class Iso_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.value_list = ("100", "200", "400", "800")
+        self.value = tk.StringVar()
+        self.value.set(self.value_list[0])
+        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.tcp_comms = tcp_comms
+
+    def command(self, value):
+        self.tcp_comms.send_iso(int(value))
+
+    def grid(self, row, column):
+        self.widget.grid(row = row, column = column)
 
 class Metering_Mode_Widget():
     def __init__(self, parent, tcp_comms):
@@ -263,21 +276,25 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.awb_param = Awb_Widget(self, tcp_comms)
         self.awb_label.grid(row = 0, column = 0)
         self.awb_param.grid(row = 0, column = 1)
+        self.iso_label = ttk.Label(self, text="ISO")
+        self.iso_param = Iso_Widget(self, tcp_comms)
+        self.iso_label.grid(row=1, column=0)
+        self.iso_param.grid(row=1, column=1)
         self.exposure_mode_label = ttk.Label(self, text="Exposure Mode")
         self.exposure_mode_param = Exposure_Mode_Widget(self, tcp_comms)
-        self.exposure_mode_label.grid(row=1, column=0)
-        self.exposure_mode_param.grid(row=1, column=1)
+        self.exposure_mode_label.grid(row=2, column=0)
+        self.exposure_mode_param.grid(row=2, column=1)
         self.metering_mode_label = ttk.Label(self, text="Metering Mode")
         self.metering_mode_param = Metering_Mode_Widget(self, tcp_comms)
-        self.metering_mode_label.grid(row=2, column=0)
-        self.metering_mode_param.grid(row=2, column=1)
+        self.metering_mode_label.grid(row=3, column=0)
+        self.metering_mode_param.grid(row=3, column=1)
 
         self.awb_gain_red_label = ttk.Label(self, text="AWB Gain Red")
         self.awb_gain_blue_label = ttk.Label(self, text="AWB Gain Blue")
         self.awb_gains_param = Awb_Gains_Widget(self, tcp_comms)
-        self.awb_gain_red_label.grid(row=3, column=0)
-        self.awb_gain_blue_label.grid(row=4, column=0)
-        self.awb_gains_param.grid(row=3, column=1)
+        self.awb_gain_red_label.grid(row=4, column=0)
+        self.awb_gain_blue_label.grid(row=5, column=0)
+        self.awb_gains_param.grid(row=4, column=1)
 
 
     def update(self):
