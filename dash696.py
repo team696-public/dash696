@@ -87,9 +87,6 @@ class Tcp_Comms():
     def send_sharpness(self, value):
         self._send_int_msg(Tcp_Tag.RASPICAM_SHARPNESS, 1, value)
 
-    def send_saturation(self, value):
-        self._send_int_msg(Tcp_Tag.RASPICAM_SATURATION, 1, value)
-
     def send_contrast(self, value):
         self._send_int_msg(Tcp_Tag.RASPICAM_CONTRAST, 1, value)
 
@@ -151,8 +148,8 @@ class Tcp_Comms():
         self._send_int_msg(Tcp_Tag.RASPICAM_JPG_WRITE_ENABLE, 1, value)
 
     def send_blob_yuv(self, y_min, y_max, u_min, u_max, v_min, v_max):
-        struct.pack('!BBBBBBB', Tcp_Tag.RASPICAM_BLOB_YUV, y_min, y_max, u_min, u_max, v_min, v_max)
-        self.sock.send(str)
+        data = struct.pack('!BBBBBBB', Tcp_Tag.RASPICAM_BLOB_YUV, y_min, y_max, u_min, u_max, v_min, v_max)
+        self.sock.send(data)
 
 
 
@@ -268,10 +265,8 @@ class Awb_Gains_Widget():
 
 
 class Cam_Param_Frame(ttk.Frame, object):
-    def __init__(self, parent, ip_addr):
+    def __init__(self, parent, tcp_comms):
         super(Cam_Param_Frame, self).__init__(parent)
-        TCP_PORT = 10696
-        tcp_comms = Tcp_Comms(ip_addr, TCP_PORT)
         self.awb_label = ttk.Label(self, text="AWB")
         self.awb_param = Awb_Widget(self, tcp_comms)
         self.awb_label.grid(row = 0, column = 0)
@@ -301,6 +296,119 @@ class Cam_Param_Frame(ttk.Frame, object):
         pass
 
 
+def set_pix_from_string_value(old_int_value, string_value, name):
+    saw_error = False
+    new_int_value = old_int_value
+    try:
+        new_int_value = int(string_value.get())
+    except:
+        print(name + " must be floating point value")
+        string_value.set(str(old_int_value))
+        saw_error = True
+    if (new_int_value < 0): new_int_value = 0
+    if (new_int_value > 255): new_int_value = 255
+    return (saw_error, new_int_value)
+
+
+class Blob_Yuv_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.min_y = 128
+        self.value_min_y = tk.StringVar()
+        self.value_min_y.set(str(self.min_y))
+        self.widget_min_y = tk.Entry(parent, textvariable=self.value_min_y)
+
+        self.min_u = 128
+        self.value_min_u = tk.StringVar()
+        self.value_min_u.set(str(self.min_u))
+        self.widget_min_u = tk.Entry(parent, textvariable=self.value_min_u)
+
+        self.min_v = 128
+        self.value_min_v = tk.StringVar()
+        self.value_min_v.set(str(self.min_v))
+        self.widget_min_v = tk.Entry(parent, textvariable=self.value_min_v)
+
+        self.max_y = 256
+        self.value_max_y = tk.StringVar()
+        self.value_max_y.set(str(self.max_y))
+        self.widget_max_y = tk.Entry(parent, textvariable=self.value_max_y)
+
+        self.max_u = 256
+        self.value_max_u = tk.StringVar()
+        self.value_max_u.set(str(self.max_u))
+        self.widget_max_u = tk.Entry(parent, textvariable=self.value_max_u)
+
+        self.max_v = 256
+        self.value_max_v = tk.StringVar()
+        self.value_max_v.set(str(self.max_v))
+        self.widget_max_v = tk.Entry(parent, textvariable=self.value_max_v)
+
+        self.send_button = tk.Button(parent, text="Send", command=self.command)
+        self.tcp_comms = tcp_comms
+
+
+    def command(self):
+        saw_error_1, self.min_y = set_pix_from_string_value(self.min_y, self.value_min_y, "Min Y")
+        saw_error_2, self.min_u = set_pix_from_string_value(self.min_u, self.value_min_u, "Min U")
+        saw_error_3, self.min_v = set_pix_from_string_value(self.min_v, self.value_min_v, "Min V")
+        saw_error_4, self.max_y = set_pix_from_string_value(self.max_y, self.value_max_y, "Max Y")
+        saw_error_5, self.max_u = set_pix_from_string_value(self.max_u, self.value_max_u, "Max U")
+        saw_error_6, self.max_v = set_pix_from_string_value(self.max_v, self.value_max_v, "Max V")
+
+
+        if not saw_error_1 and not saw_error_2 and not saw_error_3 and \
+           not saw_error_4 and not saw_error_5 and not saw_error_6:
+            self.tcp_comms.send_blob_yuv(self.min_y, self.max_y, self.min_u, self.max_u, self.min_v, self.max_v)
+
+    def grid(self, row, column):
+        self.widget_min_y.grid(row = row, column = column)
+        self.widget_min_u.grid(row = row, column = column + 1)
+        self.widget_min_v.grid(row = row, column = column + 2)
+        self.widget_max_y.grid(row = row + 1, column = column)
+        self.widget_max_u.grid(row = row + 1, column = column + 1)
+        self.widget_max_v.grid(row = row + 1, column = column + 2)
+        self.send_button.grid(row = row + 2, column = column + 1)
+
+
+
+
+class Yuv_Frame(ttk.Frame, object):
+    def __init__(self, parent, tcp_comms):
+        super(Yuv_Frame, self).__init__(parent)
+        self.y_label = ttk.Label(self, text="Y")
+        self.u_label = ttk.Label(self, text="U")
+        self.v_label = ttk.Label(self, text="V")
+        self.meas_label = ttk.Label(self, text="Meas")
+        self.meas_y_text = tk.StringVar()
+        self.meas_u_text = tk.StringVar()
+        self.meas_v_text = tk.StringVar()
+        self.meas_y_text.set("128")
+        self.meas_u_text.set("128")
+        self.meas_v_text.set("128")
+        self.meas_y_label = ttk.Label(self, textvariable=self.meas_y_text)
+        self.meas_u_label = ttk.Label(self, textvariable=self.meas_u_text)
+        self.meas_v_label = ttk.Label(self, textvariable=self.meas_v_text)
+
+        self.y_label.grid(row=0, column=1)
+        self.u_label.grid(row=0, column=2)
+        self.v_label.grid(row=0, column=3)
+        self.meas_label.grid(row=1, column=0)
+        self.meas_y_label.grid(row=1, column=1)
+        self.meas_u_label.grid(row=1, column=2)
+        self.meas_v_label.grid(row=1, column=3)
+
+        self.blob_yuv_label = ttk.Label(self, text="Blob YUV")
+        self.min_label = ttk.Label(self, text="Min")
+        self.max_label = ttk.Label(self, text="Max")
+        self.blob_yuv = Blob_Yuv_Widget(self,tcp_comms)
+        self.blob_yuv_label.grid(row=2, column=0)
+        self.min_label.grid(row=3, column=0)
+        self.max_label.grid(row=4, column=0)
+        self.blob_yuv.grid(row=3, column=1)
+
+    def update(self, queue_entry):
+        self.meas_y_text.set("%3d" % (queue_entry.y))
+        self.meas_u_text.set("%3d" % (queue_entry.u))
+        self.meas_v_text.set("%3d" % (queue_entry.v))
 
 class Gain_Frame(ttk.Frame, object):
     def __init__(self, parent):
@@ -402,8 +510,12 @@ class Dash_696(ttk.Frame, object):
         self.notebook = ttk.Notebook(self.master)
         self.tab0 = Gain_Frame(self.notebook)
         self.notebook.add(self.tab0, text="Gains")
-        self.tab1 = Cam_Param_Frame(self.notebook, ip_addr)
+        TCP_PORT = 10696
+        self.tcp_comms = Tcp_Comms(ip_addr, TCP_PORT)
+        self.tab1 = Cam_Param_Frame(self.notebook, self.tcp_comms)
         self.notebook.add(self.tab1, text="Camera Params")
+        self.tab2 = Yuv_Frame(self.notebook, self.tcp_comms);
+        self.notebook.add(self.tab2, text="YUV Color")
         self.notebook.pack(side=tk.LEFT)
         self.image_label = ttk.Label(self.master)# label for the video frame
         self.image_label.pack(side=tk.RIGHT)
@@ -426,6 +538,7 @@ class Dash_696(ttk.Frame, object):
             self.update_image(queue_entry.cv_img)
             self.tab0.update(queue_entry)
             self.tab1.update()
+            self.tab2.update(queue_entry)
             self.master.after(0, func=lambda: self.update_all())
 
     def quit(self):
