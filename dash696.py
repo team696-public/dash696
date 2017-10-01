@@ -38,6 +38,7 @@ class Tcp_Tag:
     RASPICAM_JPG_WRITE_ENABLE =      22
     RASPICAM_DETECT_YUV_ENABLE =     23
     RASPICAM_BLOB_YUV =              24
+    RASPICAM_FREEZE_EXPOSURE =       25
 
 
 class Tcp_Comms():
@@ -110,6 +111,9 @@ class Tcp_Comms():
 
     def send_awb_mode(self, value):
         self._send_int_msg(Tcp_Tag.RASPICAM_AWB_MODE, 1, value)
+
+    def send_freeze_exposure(self, analog_target, analog_tol, digital_target, digital_tol):
+        self._send_float_msg(Tcp_Tag.RASPICAM_FREEZE_EXPOSURE, 4, analog_target, analog_tol, digital_target, digital_tol)
 
     def send_awb_gains(self, red_gain, blue_gain):
         self._send_float_msg(Tcp_Tag.RASPICAM_AWB_GAINS, 2, red_gain, blue_gain)
@@ -197,7 +201,7 @@ class Exposure_Mode_Widget():
 
 class Iso_Widget():
     def __init__(self, parent, tcp_comms):
-        self.value_list = ("100", "200", "400", "800")
+        self.value_list = ("100", "200", "300", "400", "500", "640", "800")
         self.value = tk.StringVar()
         self.value.set(self.value_list[0])
         self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
@@ -226,6 +230,63 @@ class Metering_Mode_Widget():
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
 
+class Freeze_Exposure_Widget():
+    def __init__(self, parent, tcp_comms):
+        self.analog_gain = 0.0
+        self.value_analog = tk.StringVar()
+        self.value_analog.set(str(self.analog_gain))
+        self.widget_analog = tk.Entry(parent, textvariable=self.value_analog)
+        self.digital_gain = 0.0
+        self.value_digital = tk.StringVar()
+        self.value_digital.set(str(self.digital_gain))
+        self.widget_digital = tk.Entry(parent, textvariable=self.value_digital)
+        self.analog_tol = 0.0
+        self.value_analog_tol = tk.StringVar()
+        self.value_analog_tol.set(str(self.analog_tol))
+        self.widget_analog_tol = tk.Entry(parent, textvariable=self.value_analog_tol)
+        self.digital_tol = 0.0
+        self.value_digital_tol = tk.StringVar()
+        self.value_digital_tol.set(str(self.digital_tol))
+        self.widget_digital_tol = tk.Entry(parent, textvariable=self.value_digital_tol)
+        self.ok_button = tk.Button(parent, text="send", command=self.command)
+        self.tcp_comms = tcp_comms
+
+    def command(self):
+        saw_error = False
+        try:
+            self.analog_gain = float(self.value_analog.get())
+        except:
+            print("analog must be floating point value")
+            self.value_analog.set(str(self.analog_gain))
+            saw_error = True
+        try:
+            self.digital_gain = float(self.value_digital.get())
+        except:
+            print("digital must be floating point value")
+            self.value_digital.set(str(self.digital_gain))
+            saw_error = True
+        try:
+            self.analog_tol = float(self.value_analog_tol.get())
+        except:
+            print("analog tol must be floating point value")
+            self.value_analog_tol.set(str(self.analog_tol))
+            saw_error = True
+        try:
+            self.digital_tol = float(self.value_digital_tol.get())
+        except:
+            print("digital tol must be floating point value")
+            self.value_digital_tol.set(str(self.digital_tol))
+            saw_error = True
+        if not saw_error:
+            self.tcp_comms.send_freeze_exposure(self.analog_gain, self.analog_tol, self.digital_gain, self.digital_tol)
+
+    def grid(self, row, column):
+        self.widget_analog.grid(row = row, column = column)
+        self.widget_digital.grid(row = row + 1, column = column)
+        self.widget_analog_tol.grid(row = row + 2, column = column)
+        self.widget_digital_tol.grid(row=row + 3, column = column)
+        self.ok_button.grid(row = row + 4, column = column)
+
 class Awb_Gains_Widget():
     def __init__(self, parent, tcp_comms):
         self.red_gain = 0.0
@@ -236,7 +297,7 @@ class Awb_Gains_Widget():
         self.value_blue = tk.StringVar()
         self.value_blue.set(str(self.blue_gain))
         self.widget_blue = tk.Entry(parent, textvariable=self.value_blue)
-        self.ok_button = tk.Button(parent, text="OK", command=self.command)
+        self.ok_button = tk.Button(parent, text="send", command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self):
@@ -284,12 +345,23 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.metering_mode_label.grid(row=3, column=0)
         self.metering_mode_param.grid(row=3, column=1)
 
+        self.analog_gain_label = ttk.Label(self, text="Freeze Analog Gain")
+        self.digital_gain_label = ttk.Label(self, text="Freeze Digital Gain")
+        self.analog_tol_label = ttk.Label(self, text="Analog Tolerance")
+        self.digital_tol_label = ttk.Label(self, text="Digital Tolerance")
+        self.gains_param = Freeze_Exposure_Widget(self, tcp_comms)
+        self.analog_gain_label.grid(row=4, column=0)
+        self.digital_gain_label.grid(row=5, column=0)
+        self.analog_tol_label.grid(row=6, column=0)
+        self.digital_tol_label.grid(row=7, column=0)
+        self.gains_param.grid(row=4, column=1)
+
         self.awb_gain_red_label = ttk.Label(self, text="AWB Gain Red")
         self.awb_gain_blue_label = ttk.Label(self, text="AWB Gain Blue")
         self.awb_gains_param = Awb_Gains_Widget(self, tcp_comms)
-        self.awb_gain_red_label.grid(row=4, column=0)
-        self.awb_gain_blue_label.grid(row=5, column=0)
-        self.awb_gains_param.grid(row=4, column=1)
+        self.awb_gain_red_label.grid(row=9, column=0)
+        self.awb_gain_blue_label.grid(row=10, column=0)
+        self.awb_gains_param.grid(row=9, column=1)
 
 
     def update(self):
@@ -555,6 +627,7 @@ class Image_Capture_Queue_Entry():
                  y = 0,
                  u = 0,
                  v = 0,
+                 exp_mode_status = 0,
                  udp_connection_status = 0,
                  bits_per_second = 0.0,
                  frames_per_second = 0.0):
@@ -571,6 +644,7 @@ class Image_Capture_Queue_Entry():
         self.y = y
         self.u = u
         self.v = v
+        self.exp_mode_status = exp_mode_status
         self.udp_connection_status = udp_connection_status
         self.bits_per_second = bits_per_second
         self.frames_per_second = frames_per_second
@@ -590,6 +664,7 @@ def parse_tif_tags(jpg):
     y = 0
     u = 0
     v = 0
+    exp_mode_status = 0
     for ii in range(0, ifd_count):
         start_off = TIFOFF + ifd_offset + 2 + ii * 12
         tag, type, count, num = struct.unpack('!HHII', jpg[start_off:start_off + 12])
@@ -599,7 +674,7 @@ def parse_tif_tags(jpg):
             gain_count = count
             gain_offset = num
         elif tag == 0x9699:
-            tag, type, count, y, u, v = struct.unpack('!HHIBBB', jpg[start_off:start_off + 11])
+            tag, type, count, y, u, v, exp_mode_status = struct.unpack('!HHIBBBB', jpg[start_off:start_off + 12])
         elif tag == 0x9696:
             bbox_count = count
             bbox_offset = num
@@ -614,7 +689,7 @@ def parse_tif_tags(jpg):
             start_off = TIFOFF + bbox_offset + ii * 8
             x0, y0, x1, y1 = struct.unpack('!HHHH', jpg[start_off:start_off + 8])
             rect_list.append(((x0, y0), (x1, y1)))
-    return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, rect_list)
+    return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, exp_mode_status, rect_list)
 
 def connect_to_server(ip_addr, port):
     connected = False
@@ -656,16 +731,13 @@ def image_capture(ip_addr, queue, do_quit):
         b = bytes.find('\xff\xd9')
         if a != -1 and b != -1:
             jpg = bytes[a:b + 2]
-            exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, rect_list = parse_tif_tags(jpg)
+            exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, exp_mode_status, rect_list = parse_tif_tags(jpg)
             bytes = bytes[b + 2:]
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
                 cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
             draw_crosshairs(i)
             frame_secs = time.time() - start_secs
-            #if frame_secs > 0.0: print("Kb/sec = %.1f   frames/sec = %.1f" % (byte_count / frame_secs / 1000.0 * 8, 1.0 / frame_secs))
-            #print("exp= %u  gains: alog %.3f dig %.3f red %.3f blue %.3f" % (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain))
-            #print("yuv= %u %u %u" % (y, u, v))
             frames_per_second = 0.0
             bits_per_second = 0.0
             if frame_secs > 0:
@@ -675,7 +747,7 @@ def image_capture(ip_addr, queue, do_quit):
             byte_count = 0
             udp_connection_status = 0
             queue.put(Image_Capture_Queue_Entry(i, exposure/1000.0, analog_gain, digital_gain, awb_red_gain,
-                                                awb_blue_gain, y, u, v, udp_connection_status, bits_per_second,
+                                                awb_blue_gain, y, u, v, exp_mode_status, udp_connection_status, bits_per_second,
                                                 frames_per_second))
     null_image = np.zeros((0, 0, 3), np.uint8)
     queue.put(Image_Capture_Queue_Entry(null_image))
