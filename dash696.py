@@ -39,14 +39,27 @@ class Tcp_Tag:
     RASPICAM_DETECT_YUV_ENABLE =     23
     RASPICAM_BLOB_YUV =              24
     RASPICAM_FREEZE_EXPOSURE =       25
+    RASPICAM_CROSSHAIRS =            26
 
 
 class Tcp_Comms():
+    """TCP communications with the input_raspicam_696 process on the Raspberry Pi"""
     def __init__(self, ip_addr, port):
+        """Tcp_Comms Constructor
+        Parameters:
+            ip_addr = IP address of the host running input_raspicam_696
+            port = port number used by input_raspicam_696
+        """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((ip_addr, port))
 
     def _send_int_msg(self, tag, count, int0=0, int1=0, int2=0):
+        """Send a message comprised of integer fields to the host
+        Parameters:
+            tag = identifies the type of this message
+            count = the number of integers to follow
+            intX = an integer argument
+        """
         if count == 0:
             data = struct.pack('!BBBB', tag, 0, 0, 0)
         elif count == 1:
@@ -63,6 +76,12 @@ class Tcp_Comms():
             print("_send_int_msg: short sock.send byte count (" + str(bytes) + "); expected " + str(len(data)) + "; ignoring")
 
     def _send_float_msg(self, tag, count, float0 = 0, float1 = 0, float2 = 0, float3 = 0):
+        """Send a message comprised of float fields to the host
+        Parameters:
+            tag = identifies the type of this message
+            count = the number of floats to follow
+            floatX = a float argument
+        """
         if count == 0:
             data = struct.pack('!BBBB', tag, 0, 0, 0)
         elif count == 1:
@@ -155,8 +174,9 @@ class Tcp_Comms():
         data = struct.pack('!BBBBBBB', Tcp_Tag.RASPICAM_BLOB_YUV, y_min, y_max, u_min, u_max, v_min, v_max)
         self.sock.send(data)
 
-
-
+    def send_crosshairs(self, x, y):
+        self._send_int_msg(Tcp_Tag.RASPICAM_CROSSHAIRS, 2, x, y)
+        print("send_crosshairs " + str(x) + " " + str(y))
 
 
 
@@ -166,6 +186,7 @@ class Tcp_Comms():
 
 #tkinter GUI functions----------------------------------------------------------
 class Awb_Widget():
+    """This widget allows the user to set the auto white balance to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
         self.value_list = ("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
                            "incandescent", "flash", "horizon")
@@ -175,6 +196,7 @@ class Awb_Widget():
         self.tcp_comms = tcp_comms
 
     def command(self, value):
+        """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
         for ii in range(0, len(self.value_list)):
             if value == self.value_list[ii]: break
         self.tcp_comms.send_awb_mode(ii)
@@ -183,6 +205,7 @@ class Awb_Widget():
         self.widget.grid(row = row, column = column)
 
 class Exposure_Mode_Widget():
+    """This widget allows the user to set the exposure mode to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
         self.value_list = ("off", "auto", "night", "nightpreview", "backlight", "spotlight", "sports",
                            "snow", "beach", "verylong", "fixedfps", "antishake", "fireworks")
@@ -192,6 +215,7 @@ class Exposure_Mode_Widget():
         self.tcp_comms = tcp_comms
 
     def command(self, value):
+        """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
         for ii in range(0, len(self.value_list)):
             if value == self.value_list[ii]: break
         self.tcp_comms.send_exposure_mode(ii)
@@ -200,6 +224,7 @@ class Exposure_Mode_Widget():
         self.widget.grid(row = row, column = column)
 
 class Iso_Widget():
+    """This widget allows the user to set the ISO to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
         self.value_list = ("100", "200", "300", "400", "500", "640", "800")
         self.value = tk.StringVar()
@@ -208,12 +233,14 @@ class Iso_Widget():
         self.tcp_comms = tcp_comms
 
     def command(self, value):
+        """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
         self.tcp_comms.send_iso(int(value))
 
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
 
 class Metering_Mode_Widget():
+    """This widget allows the user to set the metering mode to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
         self.value_list = ("average", "spot", "backlit", "matrix")
         self.value = tk.StringVar()
@@ -222,6 +249,7 @@ class Metering_Mode_Widget():
         self.tcp_comms = tcp_comms
 
     def command(self, value):
+        """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
         for ii in range(0, len(self.value_list)):
             if value == self.value_list[ii]: break
         print(value + " " + str(ii))
@@ -231,6 +259,7 @@ class Metering_Mode_Widget():
         self.widget.grid(row = row, column = column)
 
 class Freeze_Exposure_Widget():
+    """This widget allows the user to set values for Freeze Analog Gain, Freeze Digital Gain, Analog Tolerance and Digital Tolerance"""
     def __init__(self, parent, tcp_comms):
         self.analog_gain = 0.0
         self.value_analog = tk.StringVar()
@@ -248,10 +277,11 @@ class Freeze_Exposure_Widget():
         self.value_digital_tol = tk.StringVar()
         self.value_digital_tol.set(str(self.digital_tol))
         self.widget_digital_tol = tk.Entry(parent, textvariable=self.value_digital_tol)
-        self.ok_button = tk.Button(parent, text="send", command=self.command)
+        self.ok_button = tk.Button(parent, text="Send", command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self):
+        """When the 'Send' button is pushed this function is called to send a TCP message to the host to set the specified parameter values."""
         saw_error = False
         try:
             self.analog_gain = float(self.value_analog.get())
@@ -288,6 +318,7 @@ class Freeze_Exposure_Widget():
         self.ok_button.grid(row = row + 4, column = column)
 
 class Awb_Gains_Widget():
+    """This widget allows the user to set values for AWB Gain Red and AWB Gain Blue."""
     def __init__(self, parent, tcp_comms):
         self.red_gain = 0.0
         self.value_red = tk.StringVar()
@@ -297,10 +328,11 @@ class Awb_Gains_Widget():
         self.value_blue = tk.StringVar()
         self.value_blue.set(str(self.blue_gain))
         self.widget_blue = tk.Entry(parent, textvariable=self.value_blue)
-        self.ok_button = tk.Button(parent, text="send", command=self.command)
+        self.ok_button = tk.Button(parent, text="Send", command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self):
+        """When the 'Send' button is pushed this function is called to send a TCP message to the host to set the specified parameter values."""
         saw_error = False
         try:
             self.red_gain = float(self.value_red.get())
@@ -326,6 +358,7 @@ class Awb_Gains_Widget():
 
 
 class Cam_Param_Frame(ttk.Frame, object):
+    """Defines the 'Camera Params' tab; used to set camera parameters."""
     def __init__(self, parent, tcp_comms):
         super(Cam_Param_Frame, self).__init__(parent)
         self.awb_label = ttk.Label(self, text="AWB")
@@ -383,6 +416,7 @@ def set_pix_from_string_value(old_int_value, string_value, name):
 
 
 class Blob_Yuv_Widget():
+    """This widget allows the user to set values for the 'Blob YUV' parameters that define the range of target colors."""
     def __init__(self, parent, tcp_comms):
         self.min_y = 128
         self.value_min_y = tk.StringVar()
@@ -444,12 +478,13 @@ class Blob_Yuv_Widget():
 
 
 class Yuv_Frame(ttk.Frame, object):
+    """Defines the 'YUV Color' tab; used to view current YUV color value at the crosshairs, and to set the Blob YUV parameter values."""
     def __init__(self, parent, tcp_comms):
         super(Yuv_Frame, self).__init__(parent)
         self.y_label = ttk.Label(self, text="Y")
         self.u_label = ttk.Label(self, text="U")
         self.v_label = ttk.Label(self, text="V")
-        self.meas_label = ttk.Label(self, text="Meas")
+        self.meas_label = ttk.Label(self, text="Crosshairs")
         self.meas_y_text = tk.StringVar()
         self.meas_u_text = tk.StringVar()
         self.meas_v_text = tk.StringVar()
@@ -483,6 +518,7 @@ class Yuv_Frame(ttk.Frame, object):
         self.meas_v_text.set("%3d" % (queue_entry.v))
 
 class Gain_Frame(ttk.Frame, object):
+    """Defines the 'Gains' tab, used to view current camera gain settings."""
     def __init__(self, parent):
         super(Gain_Frame, self).__init__(parent)
 
@@ -494,8 +530,10 @@ class Gain_Frame(ttk.Frame, object):
         self.y_text = tk.StringVar()
         self.u_text = tk.StringVar()
         self.v_text = tk.StringVar()
-        self.bits_per_second_text = tk.StringVar()
+        self.k_bits_per_second_text = tk.StringVar()
         self.frames_per_second_text = tk.StringVar()
+        self.smooth_k_bits_per_second = 0.0
+        self.smooth_frames_per_second = 0.0
 
         self.exposure_text.set("1.0")
         self.analog_text.set("1.0")
@@ -505,7 +543,7 @@ class Gain_Frame(ttk.Frame, object):
         self.y_text.set("128")
         self.u_text.set("128")
         self.v_text.set("128")
-        self.bits_per_second_text.set("0.0")
+        self.k_bits_per_second_text.set("0.0")
         self.frames_per_second_text.set("0.0")
 
         self.exposure_label_1 = ttk.Label(self, text="exposure")
@@ -533,25 +571,25 @@ class Gain_Frame(ttk.Frame, object):
         self.awb_blue_label_1.grid(row=4, column=0)
         self.awb_blue_label_2.grid(row=4, column=1)
 
-        self.y_label_1 = ttk.Label(self, text="center Y")
+        self.y_label_1 = ttk.Label(self, text="crosshairs Y")
         self.y_label_2 = ttk.Label(self, textvariable=self.y_text)
         self.y_label_1.grid(row=5, column=0)
         self.y_label_2.grid(row=5, column=1)
 
-        self.u_label_1 = ttk.Label(self, text="center U")
+        self.u_label_1 = ttk.Label(self, text="crosshairs U")
         self.u_label_2 = ttk.Label(self, textvariable=self.u_text)
         self.u_label_1.grid(row=6, column=0)
         self.u_label_2.grid(row=6, column=1)
 
-        self.v_label_1 = ttk.Label(self, text="center V")
+        self.v_label_1 = ttk.Label(self, text="crosshairs V")
         self.v_label_2 = ttk.Label(self, textvariable=self.v_text)
         self.v_label_1.grid(row=7, column=0)
         self.v_label_2.grid(row=7, column=1)
 
-        self.bits_per_second_label_1 = ttk.Label(self, text="bits per second")
-        self.bits_per_second_label_2 = ttk.Label(self, textvariable = self.bits_per_second_text)
-        self.bits_per_second_label_1.grid(row=8, column=0)
-        self.bits_per_second_label_2.grid(row=8, column=1)
+        self.k_bits_per_second_label_1 = ttk.Label(self, text="bits per second")
+        self.k_bits_per_second_label_2 = ttk.Label(self, textvariable = self.k_bits_per_second_text)
+        self.k_bits_per_second_label_1.grid(row=8, column=0)
+        self.k_bits_per_second_label_2.grid(row=8, column=1)
 
         self.frames_per_second_label_1 = ttk.Label(self, text="frames per second")
         self.frames_per_second_label_2 = ttk.Label(self, textvariable=self.frames_per_second_text)
@@ -567,14 +605,18 @@ class Gain_Frame(ttk.Frame, object):
         self.y_text.set("%3d" % (queue_entry.y))
         self.u_text.set("%3d" % (queue_entry.u))
         self.v_text.set("%3d" % (queue_entry.v))
+        ALPHA = 0.99
         if queue_entry.bits_per_second > 0.0:
-            self.bits_per_second_text.set("%12.3f K" % (queue_entry.bits_per_second))
+            self.smooth_k_bits_per_second = ALPHA * self.smooth_k_bits_per_second + (1.0 - ALPHA) * (queue_entry.bits_per_second / 1000.0)
+            self.k_bits_per_second_text.set("%12.3f K" % (self.smooth_k_bits_per_second))
         if queue_entry.frames_per_second > 0.0:
-            self.frames_per_second_text.set("%10.3f" % (queue_entry.frames_per_second))
+            self.smooth_frames_per_second = ALPHA * self.smooth_frames_per_second + (1.0 - ALPHA) * queue_entry.frames_per_second
+            self.frames_per_second_text.set("%10.3f" % (self.smooth_frames_per_second))
 
 
 class Dash_696(ttk.Frame, object):
-    def __init__(self, ip_addr, queue):
+    """Defines the entire Dash696 GUI."""
+    def __init__(self, ip_addr, queue, crosshairs_position):
         super(Dash_696, self).__init__()
         self.style = ttk.Style()
         self.style.theme_use("default")
@@ -591,12 +633,22 @@ class Dash_696(ttk.Frame, object):
         self.notebook.pack(side=tk.LEFT)
         self.image_label = ttk.Label(self.master)# label for the video frame
         self.image_label.pack(side=tk.RIGHT)
+        self.image_label.bind('<Button-3>', self.on_right_click)
         self.do_quit = False
         self.master.after(0, func=lambda: self.update_all())
+        self.crosshairs_position = crosshairs_position
+
+    def on_right_click(self, event):
+        self.tcp_comms.send_crosshairs(event.x, event.y)
+        self.crosshairs_position.set(event.x, event.y)
 
     def update_image(self, cv_img):
         im = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         a = PIL.Image.fromarray(im)
+        if self.crosshairs_position.x.value < 0:
+            width, height = a.size
+            self.crosshairs_position.x.value = width / 2
+            self.crosshairs_position.y.value = height / 2
         b = PIL.ImageTk.PhotoImage(image=a)
         self.image_label.configure(image=b)
         self.image_label._image_cache = b  # avoid garbage collection
@@ -617,6 +669,7 @@ class Dash_696(ttk.Frame, object):
         self.master.quit() # quit mainloop()
 
 class Image_Capture_Queue_Entry():
+    """Holds the current image and metadata extracted from the image header; this is sent from image_capture to dash_696 via a queue."""
     def __init__(self,
                  cv_img,
                  exposure_secs = 0.0,
@@ -702,20 +755,22 @@ def connect_to_server(ip_addr, port):
             print("can't urlopen " + ip_port + " " + str(e))
     return stream
 
-def draw_crosshairs(img):
+def draw_crosshairs(img, crosshairs_position):
     LEN = 3  # length in pixels of each component of crosshairs mark
     COLOR = (0, 255, 255)
     rows, cols, channels = img.shape
-    center_x = cols / 2
-    center_y = rows / 2
-    cv2.line(img, (center_x, center_y - 2 * LEN), (center_x, center_y - LEN), COLOR)
-    cv2.line(img, (center_x, center_y + 2 * LEN), (center_x, center_y + LEN), COLOR)
-    cv2.line(img, (center_x - 2 * LEN, center_y), (center_x - LEN, center_y), COLOR)
-    cv2.line(img, (center_x + 2 * LEN, center_y), (center_x + LEN, center_y), COLOR)
+    #x = cols / 2
+    #y = rows / 2
+    x = int(crosshairs_position.x.value + 0.5)
+    y = int(crosshairs_position.y.value + 0.5)
+    cv2.line(img, (x, y - 2 * LEN), (x, y - LEN), COLOR)
+    cv2.line(img, (x, y + 2 * LEN), (x, y + LEN), COLOR)
+    cv2.line(img, (x - 2 * LEN, y), (x - LEN, y), COLOR)
+    cv2.line(img, (x + 2 * LEN, y), (x + LEN, y), COLOR)
 
 
 #multiprocessing image processing functions-------------------------------------
-def image_capture(ip_addr, queue, do_quit):
+def image_capture(ip_addr, queue, do_quit, crosshairs_position):
     bytes = ''
     byte_count = 0
     start_secs = time.time()
@@ -736,12 +791,12 @@ def image_capture(ip_addr, queue, do_quit):
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
                 cv2.rectangle(i, rect[0], rect[1], (0, 0, 255))
-            draw_crosshairs(i)
+            draw_crosshairs(i, crosshairs_position)
             frame_secs = time.time() - start_secs
             frames_per_second = 0.0
             bits_per_second = 0.0
             if frame_secs > 0:
-                bits_per_second = byte_count / frame_secs / 1000.0 * 8
+                bits_per_second = 8.0 * byte_count / frame_secs
                 frames_per_second = 1.0 / frame_secs
             start_secs = time.time()
             byte_count = 0
@@ -759,16 +814,26 @@ class Quitter():
     def quit(self):
         self.do_quit.value = 1
 
+class Crosshairs_Position():
+    def __init__(self):
+        self.x = multiprocessing.Value('d', -1)
+        self.y = multiprocessing.Value('d', -1)
+    def set(self, x, y):
+        self.x.value = x
+        self.y.value = y
+
 if __name__ == '__main__':
    queue = multiprocessing.Queue()
    print 'queue initialized...'
    root = tk.Tk()
    root.wm_title("dash696")
    quitter = Quitter()
+   crosshairs_position = Crosshairs_Position()
    root.protocol("WM_DELETE_WINDOW", quitter.quit) # quit if window is deleted
    SERVER_IP_ADDR = "10.6.96.96"
-   dash_696 = Dash_696(SERVER_IP_ADDR, queue)
-   p = multiprocessing.Process(target=image_capture, args=(SERVER_IP_ADDR, queue, quitter.do_quit))
+   #SERVER_IP_ADDR = "10.0.1.7"
+   dash_696 = Dash_696(SERVER_IP_ADDR, queue, crosshairs_position)
+   p = multiprocessing.Process(target=image_capture, args=(SERVER_IP_ADDR, queue, quitter.do_quit, crosshairs_position))
    p.start()
    print 'image capture process has started...'
 
