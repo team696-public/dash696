@@ -51,7 +51,14 @@ class Tcp_Comms():
             port = port number used by input_raspicam_696
         """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((ip_addr, port))
+        is_connected = False
+        while not is_connected:
+            try:
+                self.sock.connect((ip_addr, port))
+                is_connected = True
+            except Exception, e:
+                print("can't connect to " + ip_addr + "/" + str(port) + ": " + str(e))
+                time.sleep(3)
 
     def _send_int_msg(self, tag, count, int0=0, int1=0, int2=0):
         """Send a message comprised of integer fields to the host
@@ -396,8 +403,11 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.awb_gain_blue_label.grid(row=10, column=0)
         self.awb_gains_param.grid(row=9, column=1)
 
-
-    def update(self):
+    def update(self, queue_entry):
+        # TODO: parse queue_entry.flags for UDP status
+        bit1 = 0x1 & (queue_entry.flags >> 1)
+        bit2 = 0x1 & (queue_entry.flags >> 2)
+        print("bit12= " + str(bit1) + " " + str(bit2))
         pass
 
 
@@ -524,7 +534,9 @@ class Gain_Frame(ttk.Frame, object):
 
         self.exposure_text = tk.StringVar()
         self.analog_text = tk.StringVar()
+        self.analog_label_text = tk.StringVar()
         self.digital_text = tk.StringVar()
+        self.digital_label_text = tk.StringVar()
         self.awb_red_text = tk.StringVar()
         self.awb_blue_text = tk.StringVar()
         self.y_text = tk.StringVar()
@@ -551,12 +563,12 @@ class Gain_Frame(ttk.Frame, object):
         self.exposure_label_1.grid(row = 0, column = 0)
         self.exposure_label_2.grid(row = 0, column = 1)
 
-        self.analog_label_1 = ttk.Label(self, text="analog")
+        self.analog_label_1 = ttk.Label(self, textvariable = self.analog_label_text)
         self.analog_label_2 = ttk.Label(self, textvariable = self.analog_text)
         self.analog_label_1.grid(row=1, column=0)
         self.analog_label_2.grid(row=1, column=1)
 
-        self.digital_label_1 = ttk.Label(self, text="digital")
+        self.digital_label_1 = ttk.Label(self, textvariable = self.digital_label_text)
         self.digital_label_2 = ttk.Label(self, textvariable = self.digital_text)
         self.digital_label_1.grid(row=2, column=0)
         self.digital_label_2.grid(row=2, column=1)
@@ -597,6 +609,15 @@ class Gain_Frame(ttk.Frame, object):
         self.frames_per_second_label_2.grid(row=9, column=1)
 
     def update(self, queue_entry):
+        # Parse queue_entry.flags for gain_is_frozen bit
+        bit0 = 0x1 & queue_entry.flags
+        if (bit0):
+            self.analog_label_text.set("analog (frozen)")
+            self.digital_label_text.set("digital (frozen)")
+        else:
+            self.analog_label_text.set("analog         ")
+            self.digital_label_text.set("digital         ")
+
         self.exposure_text.set("%10.3f" % (queue_entry.exposure_secs))
         self.analog_text.set("%10.3f" %(queue_entry.analog_gain))
         self.digital_text.set("%10.3f" % (queue_entry.digital_gain))
@@ -661,7 +682,7 @@ class Dash_696(ttk.Frame, object):
         else:
             self.update_image(queue_entry.cv_img)
             self.tab0.update(queue_entry)
-            self.tab1.update()
+            self.tab1.update(queue_entry)
             self.tab2.update(queue_entry)
             self.master.after(0, func=lambda: self.update_all())
 
@@ -680,8 +701,7 @@ class Image_Capture_Queue_Entry():
                  y = 0,
                  u = 0,
                  v = 0,
-                 exp_mode_status = 0,
-                 udp_connection_status = 0,
+                 flags = 0,
                  bits_per_second = 0.0,
                  frames_per_second = 0.0):
         self.do_quit = False
@@ -697,8 +717,7 @@ class Image_Capture_Queue_Entry():
         self.y = y
         self.u = u
         self.v = v
-        self.exp_mode_status = exp_mode_status
-        self.udp_connection_status = udp_connection_status
+        self.flags = flags
         self.bits_per_second = bits_per_second
         self.frames_per_second = frames_per_second
 
@@ -717,7 +736,7 @@ def parse_tif_tags(jpg):
     y = 0
     u = 0
     v = 0
-    exp_mode_status = 0
+    flags = 0
     for ii in range(0, ifd_count):
         start_off = TIFOFF + ifd_offset + 2 + ii * 12
         tag, type, count, num = struct.unpack('!HHII', jpg[start_off:start_off + 12])
@@ -727,7 +746,7 @@ def parse_tif_tags(jpg):
             gain_count = count
             gain_offset = num
         elif tag == 0x9699:
-            tag, type, count, y, u, v, exp_mode_status = struct.unpack('!HHIBBBB', jpg[start_off:start_off + 12])
+            tag, type, count, y, u, v, flags = struct.unpack('!HHIBBBB', jpg[start_off:start_off + 12])
         elif tag == 0x9696:
             bbox_count = count
             bbox_offset = num
@@ -742,7 +761,7 @@ def parse_tif_tags(jpg):
             start_off = TIFOFF + bbox_offset + ii * 8
             x0, y0, x1, y1 = struct.unpack('!HHHH', jpg[start_off:start_off + 8])
             rect_list.append(((x0, y0), (x1, y1)))
-    return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, exp_mode_status, rect_list)
+    return (exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, flags, rect_list)
 
 def connect_to_server(ip_addr, port):
     connected = False
@@ -786,7 +805,7 @@ def image_capture(ip_addr, queue, do_quit, crosshairs_position):
         b = bytes.find('\xff\xd9')
         if a != -1 and b != -1:
             jpg = bytes[a:b + 2]
-            exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, exp_mode_status, rect_list = parse_tif_tags(jpg)
+            exposure, analog_gain, digital_gain, awb_red_gain, awb_blue_gain, y, u, v, flags, rect_list = parse_tif_tags(jpg)
             bytes = bytes[b + 2:]
             i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.CV_LOAD_IMAGE_COLOR)
             for rect in rect_list:
@@ -800,10 +819,8 @@ def image_capture(ip_addr, queue, do_quit, crosshairs_position):
                 frames_per_second = 1.0 / frame_secs
             start_secs = time.time()
             byte_count = 0
-            udp_connection_status = 0
             queue.put(Image_Capture_Queue_Entry(i, exposure/1000.0, analog_gain, digital_gain, awb_red_gain,
-                                                awb_blue_gain, y, u, v, exp_mode_status, udp_connection_status, bits_per_second,
-                                                frames_per_second))
+                                                awb_blue_gain, y, u, v, flags, bits_per_second, frames_per_second))
     null_image = np.zeros((0, 0, 3), np.uint8)
     queue.put(Image_Capture_Queue_Entry(null_image))
 
