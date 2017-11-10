@@ -183,7 +183,6 @@ class Tcp_Comms():
 
     def send_crosshairs(self, x, y):
         self._send_int_msg(Tcp_Tag.RASPICAM_CROSSHAIRS, 2, x, y)
-        print("send_crosshairs " + str(x) + " " + str(y))
 
 
 
@@ -404,10 +403,7 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.awb_gains_param.grid(row=9, column=1)
 
     def update(self, queue_entry):
-        # TODO: parse queue_entry.flags for UDP status
-        bit1 = 0x1 & (queue_entry.flags >> 1)
-        bit2 = 0x1 & (queue_entry.flags >> 2)
-        print("bit12= " + str(bit1) + " " + str(bit2))
+
         pass
 
 
@@ -639,13 +635,14 @@ class Dash_696(ttk.Frame, object):
     """Defines the entire Dash696 GUI."""
     def __init__(self, ip_addr, queue, crosshairs_position):
         super(Dash_696, self).__init__()
+        TCP_PORT = 10696
+        self.BORDER_WIDTH = 6
         self.style = ttk.Style()
         self.style.theme_use("default")
         self.queue = queue
         self.notebook = ttk.Notebook(self.master)
         self.tab0 = Gain_Frame(self.notebook)
         self.notebook.add(self.tab0, text="Gains")
-        TCP_PORT = 10696
         self.tcp_comms = Tcp_Comms(ip_addr, TCP_PORT)
         self.tab1 = Cam_Param_Frame(self.notebook, self.tcp_comms)
         self.notebook.add(self.tab1, text="Camera Params")
@@ -660,10 +657,14 @@ class Dash_696(ttk.Frame, object):
         self.crosshairs_position = crosshairs_position
 
     def on_right_click(self, event):
-        self.tcp_comms.send_crosshairs(event.x, event.y)
-        self.crosshairs_position.set(event.x, event.y)
+        x = event.x - self.BORDER_WIDTH
+        y = event.y - self.BORDER_WIDTH
+        if x < 0: x = 0
+        if y < 0: y = 0
+        self.tcp_comms.send_crosshairs(x, y)
+        self.crosshairs_position.set(x, y)
 
-    def update_image(self, cv_img):
+    def update_image(self, cv_img, flags):
         im = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         a = PIL.Image.fromarray(im)
         if self.crosshairs_position.x.value < 0:
@@ -671,7 +672,16 @@ class Dash_696(ttk.Frame, object):
             self.crosshairs_position.x.value = width / 2
             self.crosshairs_position.y.value = height / 2
         b = PIL.ImageTk.PhotoImage(image=a)
-        self.image_label.configure(image=b)
+        bit1 = 0x1 & (flags >> 1)
+        bit2 = 0x1 & (flags >> 2)
+        if bit1:
+            if bit2:
+                color_str = "yellow"
+            else:
+                color_str = "green"
+        else:
+            color_str = "red"
+        self.image_label.configure(background=color_str, borderwidth=self.BORDER_WIDTH, image=b)
         self.image_label._image_cache = b  # avoid garbage collection
         self.master.update()
 
@@ -680,7 +690,9 @@ class Dash_696(ttk.Frame, object):
         if queue_entry.do_quit:
             self.quit()
         else:
-            self.update_image(queue_entry.cv_img)
+
+
+            self.update_image(queue_entry.cv_img, queue_entry.flags)
             self.tab0.update(queue_entry)
             self.tab1.update(queue_entry)
             self.tab2.update(queue_entry)
