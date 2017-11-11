@@ -41,6 +41,48 @@ class Tcp_Tag:
     RASPICAM_FREEZE_EXPOSURE =       25
     RASPICAM_CROSSHAIRS =            26
 
+class Tcp_Params():
+    """Camera Parameters"""
+    def __init__(self):
+        # RASPICAM_CAMERA_PARAMS
+
+        contrast = 0
+        brightness = 0
+        saturation = 0
+        ISO = 0
+        videoStabilisation = 0
+        exposureCompensation = 0
+        exposureMode = 0
+        exposureMeterMode = 0
+        awbMode = 0
+        rotation = 0
+        hflip = 0
+        vflip = 0
+        shutter_speed = 0
+        awb_gains_r = 0.0
+        awb_gains_b = 0.0
+        drc_level = 0
+
+        # Tcp_Params
+
+        test_img_enable = False
+        yuv_write = False
+        jpg_write = False
+        detect_yuv = False
+        blob_y_min = 0
+        blob_u_min = 0
+        blob_v_min = 0
+        blob_y_max = 0
+        blob_u_max = 0
+        blob_v_min = 0
+        analog_gain_target = 0.0
+        analog_gain_tol = 0.0
+        digital_gain_target = 0.0
+        digital_gain_tol = 0.0
+        crosshairs_x = 0
+        crosshairs_y = 0
+
+
 
 class Tcp_Comms():
     """TCP communications with the input_raspicam_696 process on the Raspberry Pi"""
@@ -59,6 +101,20 @@ class Tcp_Comms():
             except Exception, e:
                 print("can't connect to " + ip_addr + "/" + str(port) + ": " + str(e))
                 time.sleep(3)
+
+    def recv_tcp_params(self):
+        data = self.sock.recv(492)
+        tp = Tcp_Params()
+        tp.sharpness, tp.contrast, tp.brightness, tp.saturation, tp.ISO, tp.videoStabilisation, \
+            tp.exposureCompensation, tp.exposureMode, tp.exposureMeterMode, tp.awbMode, \
+            tp.rotation, tp.hflip, tp.vflip, \
+            tp.roi_x, tp.roi_y, tp.roi_w, tp.roi_h, \
+            tp.shutter_speed, tp.awb_gains_r, tp.awb_gains_b, tp.drc_level,\
+            tp.test_img_enable, tp.yuv_write, tp.jpg_write, tp.detect_yuv,\
+            tp.blob_y_min, tp.blob_u_min, tp.blob_v_min, tp.blob_y_max, tp.blob_u_max, tp.blob_v_max,\
+            tp.analog_gain_target, tp.analog_gain_tol, tp.digital_gain_target, tp.digital_gain_tol,\
+            tp.crosshairs_x, tp.crosshairs_y = struct.unpack('!10i56x3i4x4diffi296x4?6B2x4f2i', data)
+        return tp
 
     def _send_int_msg(self, tag, count, int0=0, int1=0, int2=0):
         """Send a message comprised of integer fields to the host
@@ -216,7 +272,7 @@ class Exposure_Mode_Widget():
         self.value_list = ("off", "auto", "night", "nightpreview", "backlight", "spotlight", "sports",
                            "snow", "beach", "verylong", "fixedfps", "antishake", "fireworks")
         self.value = tk.StringVar()
-        self.value.set(self.value_list[1])
+        self.value.set(self.value_list[tcp_comms.tcp_params.exposureMode])
         self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
         self.tcp_comms = tcp_comms
 
@@ -224,7 +280,8 @@ class Exposure_Mode_Widget():
         """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
         for ii in range(0, len(self.value_list)):
             if value == self.value_list[ii]: break
-        self.tcp_comms.send_exposure_mode(ii)
+        self.tcp_comms.tcp_params.exposureMode = ii
+        self.tcp_comms.send_exposure_mode(self.tcp_comms.tcp_params.exposureMode)
 
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
@@ -234,13 +291,16 @@ class Iso_Widget():
     def __init__(self, parent, tcp_comms):
         self.value_list = ("100", "200", "300", "400", "500", "640", "800")
         self.value = tk.StringVar()
-        self.value.set(self.value_list[0])
+        for ii in range(0, len(self.value_list) - 1):
+            if tcp_comms.tcp_params.ISO <= self.value_list[ii]: break
+        self.value.set(self.value_list[ii])
         self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self, value):
         """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
-        self.tcp_comms.send_iso(int(value))
+        self.tcp_comms.tcp_params.ISO = int(value)
+        self.tcp_comms.send_iso(self.tcp_comms.tcp_params.ISO)
 
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
@@ -250,7 +310,7 @@ class Metering_Mode_Widget():
     def __init__(self, parent, tcp_comms):
         self.value_list = ("average", "spot", "backlit", "matrix")
         self.value = tk.StringVar()
-        self.value.set(self.value_list[0])
+        self.value.set(self.value_list[tcp_comms.tcp_params.exposureMeterMode])
         self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
         self.tcp_comms = tcp_comms
 
@@ -258,8 +318,8 @@ class Metering_Mode_Widget():
         """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
         for ii in range(0, len(self.value_list)):
             if value == self.value_list[ii]: break
-        print(value + " " + str(ii))
-        self.tcp_comms.send_metering_mode(ii)
+        self.tcp_comms.tcp_params.exposureMeterMode = ii
+        self.tcp_comms.send_metering_mode(self.tcp_comms.tcp_params.exposureMeterMode)
 
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
@@ -267,21 +327,17 @@ class Metering_Mode_Widget():
 class Freeze_Exposure_Widget():
     """This widget allows the user to set values for Freeze Analog Gain, Freeze Digital Gain, Analog Tolerance and Digital Tolerance"""
     def __init__(self, parent, tcp_comms):
-        self.analog_gain = 0.0
         self.value_analog = tk.StringVar()
-        self.value_analog.set(str(self.analog_gain))
+        self.value_analog.set(str(tcp_comms.tcp_params.analog_gain_target))
         self.widget_analog = tk.Entry(parent, textvariable=self.value_analog)
-        self.digital_gain = 0.0
         self.value_digital = tk.StringVar()
-        self.value_digital.set(str(self.digital_gain))
+        self.value_digital.set(str(tcp_comms.tcp_params.digital_gain_target))
         self.widget_digital = tk.Entry(parent, textvariable=self.value_digital)
-        self.analog_tol = 0.0
         self.value_analog_tol = tk.StringVar()
-        self.value_analog_tol.set(str(self.analog_tol))
+        self.value_analog_tol.set(str(tcp_comms.tcp_params.analog_gain_tol))
         self.widget_analog_tol = tk.Entry(parent, textvariable=self.value_analog_tol)
-        self.digital_tol = 0.0
         self.value_digital_tol = tk.StringVar()
-        self.value_digital_tol.set(str(self.digital_tol))
+        self.value_digital_tol.set(str(tcp_comms.tcp_params.digital_gain_tol))
         self.widget_digital_tol = tk.Entry(parent, textvariable=self.value_digital_tol)
         self.ok_button = tk.Button(parent, text="Send", command=self.command)
         self.tcp_comms = tcp_comms
@@ -290,31 +346,35 @@ class Freeze_Exposure_Widget():
         """When the 'Send' button is pushed this function is called to send a TCP message to the host to set the specified parameter values."""
         saw_error = False
         try:
-            self.analog_gain = float(self.value_analog.get())
+            analog_gain = float(self.value_analog.get())
         except:
             print("analog must be floating point value")
-            self.value_analog.set(str(self.analog_gain))
+            self.value_analog.set(str(self.tcp_comms.tcp_params.analog_gain_target))
             saw_error = True
         try:
-            self.digital_gain = float(self.value_digital.get())
+            digital_gain = float(self.value_digital.get())
         except:
             print("digital must be floating point value")
-            self.value_digital.set(str(self.digital_gain))
+            self.value_digital.set(str(self.tcp_comms.tcp_params.digital_gain_target))
             saw_error = True
         try:
-            self.analog_tol = float(self.value_analog_tol.get())
+            analog_tol = float(self.value_analog_tol.get())
         except:
             print("analog tol must be floating point value")
-            self.value_analog_tol.set(str(self.analog_tol))
+            self.value_analog_tol.set(str(self.tcp_comms.tcp_params.analog_gain_tol))
             saw_error = True
         try:
-            self.digital_tol = float(self.value_digital_tol.get())
+            digital_tol = float(self.value_digital_tol.get())
         except:
             print("digital tol must be floating point value")
-            self.value_digital_tol.set(str(self.digital_tol))
+            self.value_digital_tol.set(str(self.tcp_comms.tcp_params.digital_gain_tol))
             saw_error = True
         if not saw_error:
-            self.tcp_comms.send_freeze_exposure(self.analog_gain, self.analog_tol, self.digital_gain, self.digital_tol)
+            self.tcp_comms.tcp_params.analog_gain_target = analog_gain
+            self.tcp_comms.tcp_params.digital_gain_target = digital_gain
+            self.tcp_comms.tcp_params.analog_gain_tol = analog_tol
+            self.tcp_comms.tcp_params.digital_gain_tol = digital_tol
+            self.tcp_comms.send_freeze_exposure(analog_gain, analog_tol, digital_gain, digital_tol)
 
     def grid(self, row, column):
         self.widget_analog.grid(row = row, column = column)
@@ -326,11 +386,11 @@ class Freeze_Exposure_Widget():
 class Awb_Gains_Widget():
     """This widget allows the user to set values for AWB Gain Red and AWB Gain Blue."""
     def __init__(self, parent, tcp_comms):
-        self.red_gain = 0.0
+        self.red_gain = tcp_comms.tcp_params.awb_gains_r
         self.value_red = tk.StringVar()
-        self.value_red.set(str(self.red_gain))
+        self.value_red.set(str(tcp_comms.tcp_params.awb_gains_r))
         self.widget_red = tk.Entry(parent, textvariable=self.value_red)
-        self.blue_gain = 0.0
+        self.blue_gain = tcp_comms.tcp_params.awb_gains_b
         self.value_blue = tk.StringVar()
         self.value_blue.set(str(self.blue_gain))
         self.widget_blue = tk.Entry(parent, textvariable=self.value_blue)
@@ -340,20 +400,24 @@ class Awb_Gains_Widget():
     def command(self):
         """When the 'Send' button is pushed this function is called to send a TCP message to the host to set the specified parameter values."""
         saw_error = False
+        red_gain = 0.0
+        blue_gain = 0.0
         try:
-            self.red_gain = float(self.value_red.get())
+            red_gain = float(self.value_red.get())
         except:
             print("red must be floating point value")
-            self.value_red.set(str(self.red_gain))
+            self.value_red.set(str(self.tcp_comms.tcp_params.awb_gains_r))
             saw_error = True
         try:
-            self.blue_gain = float(self.value_blue.get())
+            blue_gain = float(self.value_blue.get())
         except:
             print("blue must be floating point value")
-            self.value_blue.set(str(self.blue_gain))
+            self.value_blue.set(str(self.tcp_comms.tcp_params.awb_gains_b))
             saw_error = True
         if not saw_error:
-            self.tcp_comms.send_awb_gains(self.red_gain, self.blue_gain)
+            self.tcp_comms.tcp_params.awb_gains_r = red_gain
+            self.tcp_comms.tcp_params.awb_gains_b = blue_gain
+            self.tcp_comms.send_awb_gains(red_gain, blue_gain)
 
     def grid(self, row, column):
         self.widget_red.grid(row = row, column = column)
@@ -367,33 +431,35 @@ class Cam_Param_Frame(ttk.Frame, object):
     """Defines the 'Camera Params' tab; used to set camera parameters."""
     def __init__(self, parent, tcp_comms):
         super(Cam_Param_Frame, self).__init__(parent)
-        self.awb_label = ttk.Label(self, text="AWB")
-        self.awb_param = Awb_Widget(self, tcp_comms)
-        self.awb_label.grid(row = 0, column = 0)
-        self.awb_param.grid(row = 0, column = 1)
+
         self.iso_label = ttk.Label(self, text="ISO")
         self.iso_param = Iso_Widget(self, tcp_comms)
-        self.iso_label.grid(row=1, column=0)
-        self.iso_param.grid(row=1, column=1)
+        self.iso_label.grid(row=0, column=0)
+        self.iso_param.grid(row=0, column=1)
         self.exposure_mode_label = ttk.Label(self, text="Exposure Mode")
         self.exposure_mode_param = Exposure_Mode_Widget(self, tcp_comms)
-        self.exposure_mode_label.grid(row=2, column=0)
-        self.exposure_mode_param.grid(row=2, column=1)
+        self.exposure_mode_label.grid(row=1, column=0)
+        self.exposure_mode_param.grid(row=1, column=1)
         self.metering_mode_label = ttk.Label(self, text="Metering Mode")
         self.metering_mode_param = Metering_Mode_Widget(self, tcp_comms)
-        self.metering_mode_label.grid(row=3, column=0)
-        self.metering_mode_param.grid(row=3, column=1)
+        self.metering_mode_label.grid(row=2, column=0)
+        self.metering_mode_param.grid(row=2, column=1)
 
         self.analog_gain_label = ttk.Label(self, text="Freeze Analog Gain")
         self.digital_gain_label = ttk.Label(self, text="Freeze Digital Gain")
         self.analog_tol_label = ttk.Label(self, text="Analog Tolerance")
         self.digital_tol_label = ttk.Label(self, text="Digital Tolerance")
         self.gains_param = Freeze_Exposure_Widget(self, tcp_comms)
-        self.analog_gain_label.grid(row=4, column=0)
-        self.digital_gain_label.grid(row=5, column=0)
-        self.analog_tol_label.grid(row=6, column=0)
-        self.digital_tol_label.grid(row=7, column=0)
-        self.gains_param.grid(row=4, column=1)
+        self.analog_gain_label.grid(row=3, column=0)
+        self.digital_gain_label.grid(row=4, column=0)
+        self.analog_tol_label.grid(row=5, column=0)
+        self.digital_tol_label.grid(row=6, column=0)
+        self.gains_param.grid(row=3, column=1)
+
+        self.awb_label = ttk.Label(self, text="AWB")
+        self.awb_param = Awb_Widget(self, tcp_comms)
+        self.awb_label.grid(row = 8, column = 0)
+        self.awb_param.grid(row = 8, column = 1)
 
         self.awb_gain_red_label = ttk.Label(self, text="AWB Gain Red")
         self.awb_gain_blue_label = ttk.Label(self, text="AWB Gain Blue")
@@ -424,52 +490,54 @@ def set_pix_from_string_value(old_int_value, string_value, name):
 class Blob_Yuv_Widget():
     """This widget allows the user to set values for the 'Blob YUV' parameters that define the range of target colors."""
     def __init__(self, parent, tcp_comms):
-        self.min_y = 128
         self.value_min_y = tk.StringVar()
-        self.value_min_y.set(str(self.min_y))
-        self.widget_min_y = tk.Entry(parent, textvariable=self.value_min_y)
+        self.value_min_y.set(str(tcp_comms.tcp_params.blob_y_min))
+        self.widget_min_y = tk.Entry(parent, textvariable=self.value_min_y, width=3, justify='right')
 
-        self.min_u = 128
         self.value_min_u = tk.StringVar()
-        self.value_min_u.set(str(self.min_u))
-        self.widget_min_u = tk.Entry(parent, textvariable=self.value_min_u)
+        self.value_min_u.set(str(tcp_comms.tcp_params.blob_u_min))
+        self.widget_min_u = tk.Entry(parent, textvariable=self.value_min_u, width=3, justify='right')
 
-        self.min_v = 128
         self.value_min_v = tk.StringVar()
-        self.value_min_v.set(str(self.min_v))
-        self.widget_min_v = tk.Entry(parent, textvariable=self.value_min_v)
+        self.value_min_v.set(str(tcp_comms.tcp_params.blob_v_min))
+        self.widget_min_v = tk.Entry(parent, textvariable=self.value_min_v, width=3, justify='right')
 
-        self.max_y = 256
         self.value_max_y = tk.StringVar()
-        self.value_max_y.set(str(self.max_y))
-        self.widget_max_y = tk.Entry(parent, textvariable=self.value_max_y)
+        self.value_max_y.set(str(tcp_comms.tcp_params.blob_y_max))
+        self.widget_max_y = tk.Entry(parent, textvariable=self.value_max_y, width=3, justify='right')
 
-        self.max_u = 256
         self.value_max_u = tk.StringVar()
-        self.value_max_u.set(str(self.max_u))
-        self.widget_max_u = tk.Entry(parent, textvariable=self.value_max_u)
+        self.value_max_u.set(str(tcp_comms.tcp_params.blob_u_max))
+        self.widget_max_u = tk.Entry(parent, textvariable=self.value_max_u, width=3, justify='right')
 
-        self.max_v = 256
         self.value_max_v = tk.StringVar()
-        self.value_max_v.set(str(self.max_v))
-        self.widget_max_v = tk.Entry(parent, textvariable=self.value_max_v)
+        self.value_max_v.set(str(tcp_comms.tcp_params.blob_v_max))
+        self.widget_max_v = tk.Entry(parent, textvariable=self.value_max_v, width=3, justify='right')
 
         self.send_button = tk.Button(parent, text="Send", command=self.command)
         self.tcp_comms = tcp_comms
 
 
     def command(self):
-        saw_error_1, self.min_y = set_pix_from_string_value(self.min_y, self.value_min_y, "Min Y")
-        saw_error_2, self.min_u = set_pix_from_string_value(self.min_u, self.value_min_u, "Min U")
-        saw_error_3, self.min_v = set_pix_from_string_value(self.min_v, self.value_min_v, "Min V")
-        saw_error_4, self.max_y = set_pix_from_string_value(self.max_y, self.value_max_y, "Max Y")
-        saw_error_5, self.max_u = set_pix_from_string_value(self.max_u, self.value_max_u, "Max U")
-        saw_error_6, self.max_v = set_pix_from_string_value(self.max_v, self.value_max_v, "Max V")
+        saw_error_1, self.tcp_comms.tcp_params.blob_y_min =\
+            set_pix_from_string_value(self.tcp_comms.tcp_params.blob_y_min, self.value_min_y, "Min Y")
+        saw_error_2, self.tcp_comms.tcp_params.blob_u_min =\
+            set_pix_from_string_value(self.tcp_comms.tcp_params.blob_u_min, self.value_min_u, "Min U")
+        saw_error_3, self.tcp_comms.tcp_params.blob_v_min =\
+            set_pix_from_string_value(self.tcp_comms.tcp_params.blob_v_min, self.value_min_v, "Min V")
+        saw_error_4, self.tcp_comms.tcp_params.blob_y_max =\
+            set_pix_from_string_value(self.tcp_comms.tcp_params.blob_y_max, self.value_max_y, "Max Y")
+        saw_error_5, self.tcp_comms.tcp_params.blob_u_max =\
+            set_pix_from_string_value(self.tcp_comms.tcp_params.blob_u_max, self.value_max_u, "Max U")
+        saw_error_6, self.tcp_comms.tcp_params.blob_v_max =\
+            set_pix_from_string_value(self.tcp_comms.tcp_params.blob_v_max, self.value_max_v, "Max V")
 
 
         if not saw_error_1 and not saw_error_2 and not saw_error_3 and \
            not saw_error_4 and not saw_error_5 and not saw_error_6:
-            self.tcp_comms.send_blob_yuv(self.min_y, self.max_y, self.min_u, self.max_u, self.min_v, self.max_v)
+            self.tcp_comms.send_blob_yuv(self.tcp_comms.tcp_params.blob_y_min, self.tcp_comms.tcp_params.blob_y_max,
+                                         self.tcp_comms.tcp_params.blob_u_min, self.tcp_comms.tcp_params.blob_u_max,
+                                         self.tcp_comms.tcp_params.blob_v_min, self.tcp_comms.tcp_params.blob_v_max)
 
     def grid(self, row, column):
         self.widget_min_y.grid(row = row, column = column)
@@ -614,7 +682,7 @@ class Gain_Frame(ttk.Frame, object):
             self.analog_label_text.set("analog         ")
             self.digital_label_text.set("digital         ")
 
-        self.exposure_text.set("%10.3f" % (queue_entry.exposure_secs))
+        self.exposure_text.set("%10.3f ms" % (queue_entry.exposure_secs))
         self.analog_text.set("%10.3f" %(queue_entry.analog_gain))
         self.digital_text.set("%10.3f" % (queue_entry.digital_gain))
         self.awb_red_text.set("%10.3f" % (queue_entry.awb_red_gain))
@@ -644,6 +712,28 @@ class Dash_696(ttk.Frame, object):
         self.tab0 = Gain_Frame(self.notebook)
         self.notebook.add(self.tab0, text="Gains")
         self.tcp_comms = Tcp_Comms(ip_addr, TCP_PORT)
+        self.tcp_comms.tcp_params = self.tcp_comms.recv_tcp_params()
+        #print("saturation" + str(self.tcp_comms.tcp_params.saturation))
+        #print("ISO" + str(self.tcp_comms.tcp_params.ISO))
+        #print("rotation" + str(self.tcp_comms.tcp_params.rotation))
+        #print("hflip" + str(self.tcp_comms.tcp_params.hflip))
+        #print("vflip" + str(self.tcp_comms.tcp_params.vflip))
+        #print("shutter_speed" + str(self.tcp_comms.tcp_params.shutter_speed))
+        #print("awb_gains_r" + str(self.tcp_comms.tcp_params.awb_gains_r))
+        #print("awb_gains_b" + str(self.tcp_comms.tcp_params.awb_gains_b))
+        #print("test_img_enable" + str(self.tcp_comms.tcp_params.test_img_enable))
+        #print("yuv_write" + str(self.tcp_comms.tcp_params.yuv_write))
+        #print("jpg_write" + str(self.tcp_comms.tcp_params.jpg_write))
+        #print("detect_yuv" + str(self.tcp_comms.tcp_params.detect_yuv))
+        #print("blob_y " + str(self.tcp_comms.tcp_params.blob_y_min) + ".." + str(self.tcp_comms.tcp_params.blob_y_max))
+        #print("blob_u " + str(self.tcp_comms.tcp_params.blob_u_min) + ".." + str(self.tcp_comms.tcp_params.blob_u_max))
+        #print("blob_v " + str(self.tcp_comms.tcp_params.blob_v_min) + ".." + str(self.tcp_comms.tcp_params.blob_v_max))
+        #print("analog_gain_target" + str(self.tcp_comms.tcp_params.analog_gain_target))
+        #print("analog_gain_tol" + str(self.tcp_comms.tcp_params.analog_gain_tol))
+        #print("digital_gain_target" + str(self.tcp_comms.tcp_params.digital_gain_target))
+        #print("digital_gain_tol" + str(self.tcp_comms.tcp_params.digital_gain_tol))
+        #print("crosshairs_x" + str(self.tcp_comms.tcp_params.crosshairs_x))
+        #print("crosshairs_y" + str(self.tcp_comms.tcp_params.crosshairs_y))
         self.tab1 = Cam_Param_Frame(self.notebook, self.tcp_comms)
         self.notebook.add(self.tab1, text="Camera Params")
         self.tab2 = Yuv_Frame(self.notebook, self.tcp_comms);
