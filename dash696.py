@@ -735,16 +735,31 @@ class Dash_696(ttk.Frame, object):
         #print("crosshairs_x" + str(self.tcp_comms.tcp_params.crosshairs_x))
         #print("crosshairs_y" + str(self.tcp_comms.tcp_params.crosshairs_y))
         self.tab1 = Cam_Param_Frame(self.notebook, self.tcp_comms)
-        self.notebook.add(self.tab1, text="Camera Params")
+        self.notebook.add(self.tab1, text="Cam Config")
         self.tab2 = Yuv_Frame(self.notebook, self.tcp_comms);
         self.notebook.add(self.tab2, text="YUV Color")
-        self.notebook.pack(side=tk.LEFT)
         self.image_label = ttk.Label(self.master)# label for the video frame
-        self.image_label.pack(side=tk.RIGHT)
+        self.image_label.pack(side=tk.LEFT)
         self.image_label.bind('<Button-3>', self.on_right_click)
+        self.do_show = True
+        self.hide_button = tk.Button(self.master, text="<", height=20, command=self.show_hide)
+        self.hide_button.pack(side=tk.LEFT)
+        self.notebook.pack(side=tk.LEFT)
         self.do_quit = False
         self.master.after(0, func=lambda: self.update_all())
         self.crosshairs_position = crosshairs_position
+
+    def show_hide(self):
+        if self.do_show:
+            self.do_show = False
+            self.notebook.pack_forget()
+            self.hide_button.configure(text=">")
+            self.crosshairs_position.hide()
+        else:
+            self.do_show = True
+            self.notebook.pack(side=tk.LEFT)
+            self.hide_button.configure(text="<")
+            self.crosshairs_position.show()
 
     def on_right_click(self, event):
         x = event.x - self.BORDER_WIDTH
@@ -780,8 +795,6 @@ class Dash_696(ttk.Frame, object):
         if queue_entry.do_quit:
             self.quit()
         else:
-
-
             self.update_image(queue_entry.cv_img, queue_entry.flags)
             self.tab0.update(queue_entry)
             self.tab1.update(queue_entry)
@@ -877,17 +890,16 @@ def connect_to_server(ip_addr, port):
     return stream
 
 def draw_crosshairs(img, crosshairs_position):
-    LEN = 3  # length in pixels of each component of crosshairs mark
-    COLOR = (0, 255, 255)
-    rows, cols, channels = img.shape
-    #x = cols / 2
-    #y = rows / 2
-    x = int(crosshairs_position.x.value + 0.5)
-    y = int(crosshairs_position.y.value + 0.5)
-    cv2.line(img, (x, y - 2 * LEN), (x, y - LEN), COLOR)
-    cv2.line(img, (x, y + 2 * LEN), (x, y + LEN), COLOR)
-    cv2.line(img, (x - 2 * LEN, y), (x - LEN, y), COLOR)
-    cv2.line(img, (x + 2 * LEN, y), (x + LEN, y), COLOR)
+    if crosshairs_position.do_show.value:
+        LEN = 3  # length in pixels of each component of crosshairs mark
+        COLOR = (0, 255, 255)
+        rows, cols, channels = img.shape
+        x = int(crosshairs_position.x.value + 0.5)
+        y = int(crosshairs_position.y.value + 0.5)
+        cv2.line(img, (x, y - 2 * LEN), (x, y - LEN), COLOR)
+        cv2.line(img, (x, y + 2 * LEN), (x, y + LEN), COLOR)
+        cv2.line(img, (x - 2 * LEN, y), (x - LEN, y), COLOR)
+        cv2.line(img, (x + 2 * LEN, y), (x + LEN, y), COLOR)
 
 
 #multiprocessing image processing functions-------------------------------------
@@ -937,9 +949,14 @@ class Crosshairs_Position():
     def __init__(self):
         self.x = multiprocessing.Value('d', -1)
         self.y = multiprocessing.Value('d', -1)
+        self.do_show = multiprocessing.Value('d', 1)
     def set(self, x, y):
         self.x.value = x
         self.y.value = y
+    def show(self):
+        self.do_show.value = 1
+    def hide(self):
+        self.do_show.value = 0
 
 if __name__ == '__main__':
    queue = multiprocessing.Queue()
