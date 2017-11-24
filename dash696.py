@@ -1,10 +1,15 @@
 import ttk
 import Tkinter as tk
+import ScrolledText
 import multiprocessing
 import struct
 import time
 import urllib
 import socket
+import StringIO
+import pickle
+from multiprocessing.reduction import ForkingPickler
+
 
 import PIL.Image
 import PIL.ImageTk
@@ -82,25 +87,54 @@ class Tcp_Params():
         crosshairs_x = 0
         crosshairs_y = 0
 
+def connect_tcp_comms(ip_addr, port, conn):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    is_connected = False
+    while not is_connected:
+        print("connect_tcp_comms")
+        try:
+            sock.connect((ip_addr, port))
+            is_connected = True
+        except Exception, e:
+            print("can't connect to " + ip_addr + "/" + str(port) + ": " + str(e))
+            conn.send(("can't connect to " + ip_addr + "/" + str(port) + ": " + str(e) + "\n", None))
+    print("connect done")
+    print(str(sock))
+    buf = StringIO.StringIO()
+    ForkingPickler(buf).dump(sock)
+    conn.send((None, buf.getvalue()))
 
 
 class Tcp_Comms():
     """TCP communications with the input_raspicam_696 process on the Raspberry Pi"""
-    def __init__(self, ip_addr, port):
+    def __init__(self, ip_addr, port, text_display, do_quit):
         """Tcp_Comms Constructor
         Parameters:
             ip_addr = IP address of the host running input_raspicam_696
             port = port number used by input_raspicam_696
         """
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         is_connected = False
-        while not is_connected:
+        repeat_count = 0
+        while not is_connected and not do_quit.value:
             try:
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                orig_timeout = self.sock.gettimeout()
+                self.sock.settimeout(0.5)
                 self.sock.connect((ip_addr, port))
                 is_connected = True
+            except socket.timeout as e:
+                if repeat_count % 10 == 0:
+                    text_display.insert(tk.END, "can't connect to " + ip_addr + "/" + str(port) + ": timeout\n")
             except Exception, e:
-                print("can't connect to " + ip_addr + "/" + str(port) + ": " + str(e))
-                time.sleep(3)
+                text_display.insert(tk.END, "can't connect to " + ip_addr + "/" + str(port) + ": " + str(e) + "\n")
+            text_display.update_idletasks()
+            text_display.update()
+            repeat_count = repeat_count + 1
+        if do_quit.value:
+            exit(255)
+        self.sock.settimeout(orig_timeout)
+        text_display.insert(tk.END, "connected to " + ip_addr + "/" + str(port) + "\n")
+        text_display.update()
 
     def recv_tcp_params(self):
         data = self.sock.recv(492)
@@ -247,39 +281,44 @@ class Tcp_Comms():
 
 
 #tkinter GUI functions----------------------------------------------------------
+
+awb_mode_names = ("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
+                           "incandescent", "flash", "horizon")
 class Awb_Widget():
     """This widget allows the user to set the auto white balance to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
-        self.value_list = ("off", "auto", "sun", "cloud", "shade", "tungsten", "fluorescent",
-                           "incandescent", "flash", "horizon")
+        global awb_mode_names
         self.value = tk.StringVar()
-        self.value.set(self.value_list[1])
-        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.value.set(awb_mode_names[1])
+        self.widget = tk.OptionMenu(parent, self.value, *awb_mode_names, command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self, value):
         """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
-        for ii in range(0, len(self.value_list)):
-            if value == self.value_list[ii]: break
+        global awb_mode_names
+        for ii in range(0, len(awb_mode_names)):
+            if value == awb_mode_names[ii]: break
         self.tcp_comms.send_awb_mode(ii)
 
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
 
+exposure_mode_names = ("off", "auto", "night", "nightpreview", "backlight", "spotlight", "sports",
+                           "snow", "beach", "verylong", "fixedfps", "antishake", "fireworks")
+
 class Exposure_Mode_Widget():
     """This widget allows the user to set the exposure mode to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
-        self.value_list = ("off", "auto", "night", "nightpreview", "backlight", "spotlight", "sports",
-                           "snow", "beach", "verylong", "fixedfps", "antishake", "fireworks")
+        global exposure_mode_names
         self.value = tk.StringVar()
-        self.value.set(self.value_list[tcp_comms.tcp_params.exposureMode])
-        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.value.set(exposure_mode_names[tcp_comms.tcp_params.exposureMode])
+        self.widget = tk.OptionMenu(parent, self.value, *exposure_mode_names, command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self, value):
         """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
-        for ii in range(0, len(self.value_list)):
-            if value == self.value_list[ii]: break
+        for ii in range(0, len(exposure_mode_names)):
+            if value == exposure_mode_names[ii]: break
         self.tcp_comms.tcp_params.exposureMode = ii
         self.tcp_comms.send_exposure_mode(self.tcp_comms.tcp_params.exposureMode)
 
@@ -305,19 +344,22 @@ class Iso_Widget():
     def grid(self, row, column):
         self.widget.grid(row = row, column = column)
 
+exposure_meter_mode_names = ("average", "spot", "backlit", "matrix")
+
 class Metering_Mode_Widget():
     """This widget allows the user to set the metering mode to one of a small set of legal values."""
     def __init__(self, parent, tcp_comms):
-        self.value_list = ("average", "spot", "backlit", "matrix")
+        global exposure_meter_mode_names
         self.value = tk.StringVar()
-        self.value.set(self.value_list[tcp_comms.tcp_params.exposureMeterMode])
-        self.widget = tk.OptionMenu(parent, self.value, *self.value_list, command=self.command)
+        self.value.set(exposure_meter_mode_names[tcp_comms.tcp_params.exposureMeterMode])
+        self.widget = tk.OptionMenu(parent, self.value, *exposure_meter_mode_names, command=self.command)
         self.tcp_comms = tcp_comms
 
     def command(self, value):
         """When the value is selected this function is called to send a TCP message to the host to set the specified parameter values."""
-        for ii in range(0, len(self.value_list)):
-            if value == self.value_list[ii]: break
+        global exposure_meter_mode_names
+        for ii in range(0, len(exposure_meter_mode_names)):
+            if value == exposure_meter_mode_names[ii]: break
         self.tcp_comms.tcp_params.exposureMeterMode = ii
         self.tcp_comms.send_metering_mode(self.tcp_comms.tcp_params.exposureMeterMode)
 
@@ -429,8 +471,11 @@ class Awb_Gains_Widget():
 
 class Cam_Param_Frame(ttk.Frame, object):
     """Defines the 'Camera Params' tab; used to set camera parameters."""
-    def __init__(self, parent, tcp_comms):
+    def __init__(self, parent, tcp_comms, text_display):
         super(Cam_Param_Frame, self).__init__(parent)
+
+        self.text_display = text_display
+        self.tcp_comms = tcp_comms
 
         self.iso_label = ttk.Label(self, text="ISO")
         self.iso_param = Iso_Widget(self, tcp_comms)
@@ -468,9 +513,38 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.awb_gain_blue_label.grid(row=10, column=0)
         self.awb_gains_param.grid(row=9, column=1)
 
-    def update(self, queue_entry):
+        self.command_line_button = tk.Button(self, text="Cmd Line", command=self.command_line)
+        self.command_line_button.grid(row=11,column=0)
 
+    def update(self, queue_entry):
         pass
+    def command_line(self):
+        global exposure_mode_names
+        global awb_mode_names
+        global exposure_meter_mode_names
+        self.text_display.insert(tk.END, 'mjpg_streamer -o "output_http.so -w ./www" -i "input_raspicam_696.so \ \n')
+        self.text_display.insert(tk.END, '-x 640 -y 480 -vwidth 320 -vheight 240 -fps 30 -quality 20 \ \n')
+        self.text_display.insert(tk.END, '-ISO ' + str(self.tcp_comms.tcp_params.ISO) + \
+                                 ' -ex ' + exposure_mode_names[self.tcp_comms.tcp_params.exposureMode] + \
+                                 ' -awb ' + awb_mode_names[self.tcp_comms.tcp_params.awbMode] + \
+                                 ' -awbgainR ' + '%.3f' % self.tcp_comms.tcp_params.awb_gains_r + \
+                                 ' -awbgainB ' + '%.3f' % self.tcp_comms.tcp_params.awb_gains_b + ' \ \n')
+        self.text_display.insert(tk.END, '-mm ' + exposure_meter_mode_names[self.tcp_comms.tcp_params.exposureMeterMode])
+        self.text_display.insert(tk.END, ' -blobyuv %u,%u,%u,%u,%u,%u \ \n' %
+                                 (self.tcp_comms.tcp_params.blob_y_min,
+                                  self.tcp_comms.tcp_params.blob_y_max,
+                                  self.tcp_comms.tcp_params.blob_u_min,
+                                  self.tcp_comms.tcp_params.blob_u_max,
+                                  self.tcp_comms.tcp_params.blob_v_min,
+                                  self.tcp_comms.tcp_params.blob_v_max))
+
+        self.text_display.insert(tk.END, '-againtarget %.3f -againtol %.3f -dgaintarget %.3f -dgaintol %3f\n' % \
+                                 (self.tcp_comms.tcp_params.analog_gain_target,
+                                  self.tcp_comms.tcp_params.analog_gain_tol,
+                                  self.tcp_comms.tcp_params.digital_gain_target,
+                                  self.tcp_comms.tcp_params.digital_gain_tol))
+
+
 
 
 def set_pix_from_string_value(old_int_value, string_value, name):
@@ -701,18 +775,23 @@ class Gain_Frame(ttk.Frame, object):
 
 class Dash_696(ttk.Frame, object):
     """Defines the entire Dash696 GUI."""
-    def __init__(self, ip_addr, queue, crosshairs_position):
+    def __init__(self, ip_addr, tcp_port, queue, crosshairs_position, do_quit):
         super(Dash_696, self).__init__()
-        TCP_PORT = 10696
         self.BORDER_WIDTH = 6
         self.style = ttk.Style()
         self.style.theme_use("default")
+        self.text_display = ScrolledText.ScrolledText(self.master, width=80, height=2)
+        self.text_display.pack(side=tk.BOTTOM, expand=True, fill=tk.BOTH)
         self.queue = queue
         self.notebook = ttk.Notebook(self.master)
         self.tab0 = Gain_Frame(self.notebook)
         self.notebook.add(self.tab0, text="Gains")
-        self.tcp_comms = Tcp_Comms(ip_addr, TCP_PORT)
+        self.tcp_comms = Tcp_Comms(ip_addr, tcp_port, self.text_display, do_quit)
+        if self.tcp_comms.sock == None:
+            self.master.destroy()
+            exit(255)
         self.tcp_comms.tcp_params = self.tcp_comms.recv_tcp_params()
+
         #print("saturation" + str(self.tcp_comms.tcp_params.saturation))
         #print("ISO" + str(self.tcp_comms.tcp_params.ISO))
         #print("rotation" + str(self.tcp_comms.tcp_params.rotation))
@@ -734,18 +813,17 @@ class Dash_696(ttk.Frame, object):
         #print("digital_gain_tol" + str(self.tcp_comms.tcp_params.digital_gain_tol))
         #print("crosshairs_x" + str(self.tcp_comms.tcp_params.crosshairs_x))
         #print("crosshairs_y" + str(self.tcp_comms.tcp_params.crosshairs_y))
-        self.tab1 = Cam_Param_Frame(self.notebook, self.tcp_comms)
+        self.tab1 = Cam_Param_Frame(self.notebook, self.tcp_comms, self.text_display)
         self.notebook.add(self.tab1, text="Cam Config")
         self.tab2 = Yuv_Frame(self.notebook, self.tcp_comms);
         self.notebook.add(self.tab2, text="YUV Color")
         self.image_label = ttk.Label(self.master)# label for the video frame
-        self.image_label.pack(side=tk.LEFT)
+        self.image_label.pack(side=tk.LEFT, expand=False)
         self.image_label.bind('<Button-3>', self.on_right_click)
         self.do_show = True
         self.hide_button = tk.Button(self.master, text="<", height=20, command=self.show_hide)
-        self.hide_button.pack(side=tk.LEFT)
-        self.notebook.pack(side=tk.LEFT)
-        self.do_quit = False
+        self.hide_button.pack(side=tk.LEFT, expand=False)
+        self.notebook.pack(side=tk.LEFT, expand=False)
         self.master.after(0, func=lambda: self.update_all())
         self.crosshairs_position = crosshairs_position
 
@@ -753,11 +831,22 @@ class Dash_696(ttk.Frame, object):
         if self.do_show:
             self.do_show = False
             self.notebook.pack_forget()
+            self.text_display.pack(side=tk.BOTTOM, expand=True, fill=tk.BOTH, ipady=0)
+            self.text_display.pack_forget()
+            self.image_label.pack_forget()
+            self.hide_button.pack_forget()
+            self.image_label.pack(side=tk.LEFT, expand=False, ipady=0)
+            self.hide_button.pack(side=tk.LEFT, expand=False)
             self.hide_button.configure(text=">")
             self.crosshairs_position.hide()
         else:
             self.do_show = True
-            self.notebook.pack(side=tk.LEFT)
+            self.image_label.pack_forget()
+            self.hide_button.pack_forget()
+            self.text_display.pack(side=tk.BOTTOM, expand=True, fill=tk.BOTH)
+            self.image_label.pack(side=tk.LEFT, expand=False)
+            self.hide_button.pack(side=tk.LEFT, expand=False)
+            self.notebook.pack(side=tk.LEFT, expand=False)
             self.hide_button.configure(text="<")
             self.crosshairs_position.show()
 
@@ -941,7 +1030,6 @@ def image_capture(ip_addr, queue, do_quit, crosshairs_position):
 class Quitter():
     def __init__(self):
         self.do_quit = multiprocessing.Value('d',0)
-
     def quit(self):
         self.do_quit.value = 1
 
@@ -959,26 +1047,22 @@ class Crosshairs_Position():
         self.do_show.value = 0
 
 if __name__ == '__main__':
-   queue = multiprocessing.Queue()
-   print 'queue initialized...'
-   root = tk.Tk()
-   root.wm_title("dash696")
-   quitter = Quitter()
-   crosshairs_position = Crosshairs_Position()
-   root.protocol("WM_DELETE_WINDOW", quitter.quit) # quit if window is deleted
-   SERVER_IP_ADDR = "10.6.96.96"
-   #SERVER_IP_ADDR = "10.0.1.7"
-   dash_696 = Dash_696(SERVER_IP_ADDR, queue, crosshairs_position)
-   p = multiprocessing.Process(target=image_capture, args=(SERVER_IP_ADDR, queue, quitter.do_quit, crosshairs_position))
-   p.start()
-   print 'image capture process has started...'
+    SERVER_IP_ADDR = "10.6.96.96"
+    TCP_PORT = 10696
+    queue = multiprocessing.Queue()
+    root = tk.Tk()
+    root.wm_title("dash696")
+    quitter = Quitter()
+    crosshairs_position = Crosshairs_Position()
+    root.protocol("WM_DELETE_WINDOW", quitter.quit) # quit if window is deleted
 
-   # setup the update callback
+    dash_696 = Dash_696(SERVER_IP_ADDR, TCP_PORT, queue, crosshairs_position, quitter.do_quit)
+    p = multiprocessing.Process(target=image_capture, args=(SERVER_IP_ADDR, queue, quitter.do_quit, crosshairs_position))
+    p.start()
 
-   root.mainloop()
-   print 'mainloop exit'
-   #p.terminate()
-   p.join()
-   root.destroy()
-   print 'image capture process exit'
+    # setup the update callback
+
+    root.mainloop()
+    p.join()
+    root.destroy()
 
