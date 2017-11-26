@@ -51,41 +51,41 @@ class Tcp_Params():
     def __init__(self):
         # RASPICAM_CAMERA_PARAMS
 
-        contrast = 0
-        brightness = 0
-        saturation = 0
-        ISO = 0
-        videoStabilisation = 0
-        exposureCompensation = 0
-        exposureMode = 0
-        exposureMeterMode = 0
-        awbMode = 0
-        rotation = 0
-        hflip = 0
-        vflip = 0
-        shutter_speed = 0
-        awb_gains_r = 0.0
-        awb_gains_b = 0.0
-        drc_level = 0
+        self.contrast = 0
+        self.brightness = 0
+        self.saturation = 0
+        self.ISO = 0
+        self.videoStabilisation = 0
+        self.exposureCompensation = 0
+        self.exposureMode = 0
+        self.exposureMeterMode = 0
+        self.awbMode = 0
+        self.rotation = 0
+        self.hflip = 0
+        self.vflip = 0
+        self.shutter_speed = 0
+        self.awb_gains_r = 0.0
+        self.awb_gains_b = 0.0
+        self.drc_level = 0
 
         # Tcp_Params
 
-        test_img_enable = False
-        yuv_write = False
-        jpg_write = False
-        detect_yuv = False
-        blob_y_min = 0
-        blob_u_min = 0
-        blob_v_min = 0
-        blob_y_max = 0
-        blob_u_max = 0
-        blob_v_min = 0
-        analog_gain_target = 0.0
-        analog_gain_tol = 0.0
-        digital_gain_target = 0.0
-        digital_gain_tol = 0.0
-        crosshairs_x = 0
-        crosshairs_y = 0
+        self.test_img_enable = False
+        self.yuv_write = False
+        self.jpg_write = False
+        self.detect_yuv = False
+        self.blob_y_min = 0
+        self.blob_u_min = 0
+        self.blob_v_min = 0
+        self.blob_y_max = 0
+        self.blob_u_max = 0
+        self.blob_v_max = 0
+        self.analog_gain_target = 0.0
+        self.analog_gain_tol = 0.0
+        self.digital_gain_target = 0.0
+        self.digital_gain_tol = 0.0
+        self.crosshairs_x = 0
+        self.crosshairs_y = 0
 
 def connect_tcp_comms(ip_addr, port, conn):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -133,22 +133,64 @@ class Tcp_Comms():
         if do_quit.value:
             exit(255)
         self.sock.settimeout(orig_timeout)
+        self.text_display = text_display
         text_display.insert(tk.END, "connected to " + ip_addr + "/" + str(port) + "\n")
         text_display.update()
 
     def recv_tcp_params(self):
-        data = self.sock.recv(492)
         tp = Tcp_Params()
-        tp.sharpness, tp.contrast, tp.brightness, tp.saturation, tp.ISO, tp.videoStabilisation, \
-            tp.exposureCompensation, tp.exposureMode, tp.exposureMeterMode, tp.awbMode, \
-            tp.rotation, tp.hflip, tp.vflip, \
-            tp.roi_x, tp.roi_y, tp.roi_w, tp.roi_h, \
-            tp.shutter_speed, tp.awb_gains_r, tp.awb_gains_b, tp.drc_level,\
-            tp.test_img_enable, tp.yuv_write, tp.jpg_write, tp.detect_yuv,\
-            tp.blob_y_min, tp.blob_u_min, tp.blob_v_min, tp.blob_y_max, tp.blob_u_max, tp.blob_v_max,\
-            tp.analog_gain_target, tp.analog_gain_tol, tp.digital_gain_target, tp.digital_gain_tol,\
-            tp.crosshairs_x, tp.crosshairs_y = struct.unpack('!10i56x3i4x4diffi296x4?6B2x4f2i', data)
+        try:
+            data = self.sock.recv(520)
+        except Exception as e:
+            self.text_display.insert(tk.END, "can't recv_tcp_params: %s\n" % str(e))
+        else:
+            tp.sharpness, tp.contrast, tp.brightness, tp.saturation, tp.ISO, tp.videoStabilisation, \
+                tp.exposureCompensation, tp.exposureMode, tp.exposureMeterMode, tp.awbMode, \
+                tp.rotation, tp.hflip, tp.vflip, \
+                tp.roi_x, tp.roi_y, tp.roi_w, tp.roi_h, \
+                tp.shutter_speed, tp.awb_gains_r, tp.awb_gains_b, tp.drc_level,\
+                tp.test_img_enable, tp.yuv_write, tp.jpg_write, tp.detect_yuv,\
+                tp.blob_y_min, tp.blob_u_min, tp.blob_v_min, tp.blob_y_max, tp.blob_u_max, tp.blob_v_max,\
+                tp.analog_gain_target, tp.analog_gain_tol, tp.digital_gain_target, tp.digital_gain_tol,\
+                tp.crosshairs_x, tp.crosshairs_y = struct.unpack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', data)
         return tp
+
+    def recv_text_msg(self):
+
+        timeout = False
+        data = ""
+        try:
+            orig_timeout = self.sock.gettimeout()
+            self.sock.settimeout(0.0)
+            data = self.sock.recv(81)
+        except Exception as e:
+            timeout = True
+        self.sock.settimeout(orig_timeout)
+        if timeout or len(data) != 81:
+            return
+        msg_tuple = struct.unpack('!81s', data)
+        msg = msg_tuple[0]
+        color_byte = msg[0:1]
+        text_msg = msg[1:]
+
+        if color_byte == 'r':
+            color = 'red'
+        elif color_byte == 'g':
+            color = 'green'
+        elif color_byte == 'b':
+            color = 'blue'
+        elif color_byte == 'm':
+            color = 'magenta'
+        elif color_byte == 'y':
+            color = 'yellow'
+        elif color_byte == 'c':
+            color = 'cyan'
+        else:
+            color = 'orange'
+
+        self.text_display.tag_config(color, foreground=color)
+        self.text_display.insert(tk.END, text_msg, (color))
+        #self.text_display.insert(tk.END, text_msg)
 
     def _send_int_msg(self, tag, count, int0=0, int1=0, int2=0):
         """Send a message comprised of integer fields to the host
@@ -888,6 +930,7 @@ class Dash_696(ttk.Frame, object):
             self.tab0.update(queue_entry)
             self.tab1.update(queue_entry)
             self.tab2.update(queue_entry)
+            self.tcp_comms.recv_text_msg()
             self.master.after(0, func=lambda: self.update_all())
 
     def quit(self):
@@ -1059,9 +1102,6 @@ if __name__ == '__main__':
     dash_696 = Dash_696(SERVER_IP_ADDR, TCP_PORT, queue, crosshairs_position, quitter.do_quit)
     p = multiprocessing.Process(target=image_capture, args=(SERVER_IP_ADDR, queue, quitter.do_quit, crosshairs_position))
     p.start()
-
-    # setup the update callback
-
     root.mainloop()
     p.join()
     root.destroy()
