@@ -1116,9 +1116,7 @@ def image_capture(ip_addr, queue, do_quit, crosshairs_position):
     bytes = ''
     byte_count = 0
     start_secs = time.time()
-    #ip_addr = "10.6.96.96"
     port = "8080"
-    #default_ip_port = "10.6.96.96:8080"
     stream = connect_to_server(ip_addr, port)
     while not do_quit.value:
         buf = stream.read(1024)
