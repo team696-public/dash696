@@ -1,3 +1,4 @@
+import os
 import ttk
 import Tkinter as tk
 import ScrolledText
@@ -87,6 +88,45 @@ class Tcp_Params():
         self.crosshairs_x = 0
         self.crosshairs_y = 0
 
+        dir = os.path.dirname(os.path.abspath(__file__))
+        self.save_fn = os.path.join(dir, "dash696_config.bin")
+
+
+    def save(self):
+        data = struct.pack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', self.sharpness, self.contrast, self.brightness,
+                self.saturation, self.ISO, self.videoStabilisation,
+                self.exposureCompensation, self.exposureMode, self.exposureMeterMode, self.awbMode,
+                self.rotation, self.hflip, self.vflip,
+                self.roi_x, self.roi_y, self.roi_w, self.roi_h,
+                self.shutter_speed, self.awb_gains_r, self.awb_gains_b, self.drc_level,
+                self.test_img_enable, self.yuv_write, self.jpg_write, self.detect_yuv,
+                self.blob_y_min, self.blob_u_min, self.blob_v_min, self.blob_y_max, self.blob_u_max, self.blob_v_max,
+                self.analog_gain_target, self.analog_gain_tol, self.digital_gain_target, self.digital_gain_tol,
+                self.crosshairs_x, self.crosshairs_y)
+        file = open(self.save_fn, "wb")
+        file.write(data)
+        file.close()
+
+    def restore(self):
+        try:
+            file = open(self.save_fn, "rb")
+            data = file.read()
+            file.close()
+            self.sharpness, self.contrast, self.brightness, self.saturation, self.ISO, self.videoStabilisation, \
+            self.exposureCompensation, self.exposureMode, self.exposureMeterMode, self.awbMode, \
+            self.rotation, self.hflip, self.vflip, \
+            self.roi_x, self.roi_y, self.roi_w, self.roi_h, \
+            self.shutter_speed, self.awb_gains_r, self.awb_gains_b, self.drc_level, \
+            self.test_img_enable, self.yuv_write, self.jpg_write, self.detect_yuv, \
+            self.blob_y_min, self.blob_u_min, self.blob_v_min, self.blob_y_max, self.blob_u_max, self.blob_v_max, \
+            self.analog_gain_target, self.analog_gain_tol, self.digital_gain_target, self.digital_gain_tol, \
+            self.crosshairs_x, self.crosshairs_y = struct.unpack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', data)
+            return True
+        except:
+            return False
+
+
+
 def connect_tcp_comms(ip_addr, port, conn):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     is_connected = False
@@ -136,24 +176,48 @@ class Tcp_Comms():
         self.text_display = text_display
         text_display.insert(tk.END, "connected to " + ip_addr + "/" + str(port) + "\n")
         text_display.update()
+        self.tcp_params = Tcp_Params();
+
 
     def recv_tcp_params(self):
-        tp = Tcp_Params()
         try:
             data = self.sock.recv(520)
         except Exception as e:
             self.text_display.insert(tk.END, "can't recv_tcp_params: %s\n" % str(e))
         else:
-            tp.sharpness, tp.contrast, tp.brightness, tp.saturation, tp.ISO, tp.videoStabilisation, \
-                tp.exposureCompensation, tp.exposureMode, tp.exposureMeterMode, tp.awbMode, \
-                tp.rotation, tp.hflip, tp.vflip, \
-                tp.roi_x, tp.roi_y, tp.roi_w, tp.roi_h, \
-                tp.shutter_speed, tp.awb_gains_r, tp.awb_gains_b, tp.drc_level,\
-                tp.test_img_enable, tp.yuv_write, tp.jpg_write, tp.detect_yuv,\
-                tp.blob_y_min, tp.blob_u_min, tp.blob_v_min, tp.blob_y_max, tp.blob_u_max, tp.blob_v_max,\
-                tp.analog_gain_target, tp.analog_gain_tol, tp.digital_gain_target, tp.digital_gain_tol,\
-                tp.crosshairs_x, tp.crosshairs_y = struct.unpack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', data)
-        return tp
+            self.tcp_params.sharpness, self.tcp_params.contrast, self.tcp_params.brightness, \
+                self.tcp_params.saturation, self.tcp_params.ISO, self.tcp_params.videoStabilisation, \
+                self.tcp_params.exposureCompensation, self.tcp_params.exposureMode, \
+                self.tcp_params.exposureMeterMode, self.tcp_params.awbMode, self.tcp_params.rotation, \
+                self.tcp_params.hflip, self.tcp_params.vflip, self.tcp_params.roi_x, self.tcp_params.roi_y, \
+                self.tcp_params.roi_w, self.tcp_params.roi_h, self.tcp_params.shutter_speed, \
+                self.tcp_params.awb_gains_r, self.tcp_params.awb_gains_b, self.tcp_params.drc_level, \
+                self.tcp_params.test_img_enable, self.tcp_params.yuv_write, self.tcp_params.jpg_write, \
+                self.tcp_params.detect_yuv, self.tcp_params.blob_y_min, self.tcp_params.blob_u_min, \
+                self.tcp_params.blob_v_min, self.tcp_params.blob_y_max, self.tcp_params.blob_u_max, \
+                self.tcp_params.blob_v_max, self.tcp_params.analog_gain_target, self.tcp_params.analog_gain_tol, \
+                self.tcp_params.digital_gain_target, self.tcp_params.digital_gain_tol, self.tcp_params.crosshairs_x, \
+                self.tcp_params.crosshairs_y = struct.unpack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', data)
+
+    def send_tcp_params(self):
+        data = struct.pack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', self.tcp_params.sharpness, self.tcp_params.contrast,
+                           self.tcp_params.brightness, self.tcp_params.saturation, self.tcp_params.ISO,
+                           self.tcp_params.videoStabilisation, self.tcp_params.exposureCompensation,
+                           self.tcp_params.exposureMode, self.tcp_params.exposureMeterMode, self.tcp_params.awbMode,
+                           self.tcp_params.rotation, self.tcp_params.hflip, self.tcp_params.vflip,
+                           self.tcp_params.roi_x, self.tcp_params.roi_y, self.tcp_params.roi_w, self.tcp_params.roi_h,
+                           self.tcp_params.shutter_speed, self.tcp_params.awb_gains_r, self.tcp_params.awb_gains_b,
+                           self.tcp_params.drc_level, self.tcp_params.test_img_enable, self.tcp_params.yuv_write,
+                           self.tcp_params.jpg_write, self.tcp_params.detect_yuv, self.tcp_params.blob_y_min,
+                           self.tcp_params.blob_u_min, self.tcp_params.blob_v_min, self.tcp_params.blob_y_max,
+                           self.tcp_params.blob_u_max, self.tcp_params.blob_v_max, self.tcp_params.analog_gain_target,
+                           self.tcp_params.analog_gain_tol, self.tcp_params.digital_gain_target,
+                           self.tcp_params.digital_gain_tol, self.tcp_params.crosshairs_x, self.tcp_params.crosshairs_y)
+        self.sock.send(data)
+
+    def send_tcp_params_null(self):
+        data = ""
+        self.sock.send(data)
 
     def recv_text_msg(self):
 
@@ -558,8 +622,15 @@ class Cam_Param_Frame(ttk.Frame, object):
         self.command_line_button = tk.Button(self, text="Cmd Line", command=self.command_line)
         self.command_line_button.grid(row=11,column=0)
 
+        self.save_button = tk.Button(self, text="Save", command=self.save)
+        self.save_button.grid(row=12, column=0)
+
     def update(self, queue_entry):
         pass
+
+    def save(self):
+        self.tcp_comms.tcp_params.save()
+
     def command_line(self):
         global exposure_mode_names
         global awb_mode_names
@@ -832,7 +903,13 @@ class Dash_696(ttk.Frame, object):
         if self.tcp_comms.sock == None:
             self.master.destroy()
             exit(255)
-        self.tcp_comms.tcp_params = self.tcp_comms.recv_tcp_params()
+
+
+        if self.tcp_comms.tcp_params.restore():
+            self.tcp_comms.send_tcp_params()
+        else:
+            self.tcp_comms.send_tcp_params_null()
+        self.tcp_comms.recv_tcp_params()
 
         #print("saturation" + str(self.tcp_comms.tcp_params.saturation))
         #print("ISO" + str(self.tcp_comms.tcp_params.ISO))
