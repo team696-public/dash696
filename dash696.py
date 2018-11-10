@@ -216,7 +216,11 @@ class Tcp_Comms():
         self.sock.send(data)
 
     def send_tcp_params_null(self):
-        data = ""
+        neg_crosshairs_x = -1;  # negative value signals that this is a null set of parameters
+        data = struct.pack('!10i56x3i4x4diffi296x4?6B2x4f2i28x', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                           0.0, 0.0, 0,
+                           False, False, False, False, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0,
+                           neg_crosshairs_x, 0)
         self.sock.send(data)
 
     def recv_text_msg(self):
